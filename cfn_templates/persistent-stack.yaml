@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Storage stack - S3 static site with CloudFront CSP response header
+Description: Persistent stack - S3 static site with CloudFront CSP response header
 
 Parameters:
   ResourceNamePrefix:

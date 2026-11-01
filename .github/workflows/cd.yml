@@ -22,7 +22,7 @@ env:
   AWS_REGION: ap-south-1
   MASTER_STACK_NAME: simple-master-dev
   COMPUTE_RESOURCE_PREFIX: simple-compute-dev
-  STORAGE_RESOURCE_PREFIX: simple-storage-dev
+  PERSISTENT_RESOURCE_PREFIX: simple-persistent-dev
   TEMPLATES_S3_PREFIX: templates/
 
 permissions:
@@ -62,7 +62,7 @@ jobs:
               --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
           fi
           aws s3 cp cfn_templates/compute-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}compute-stack.yaml"
-          aws s3 cp cfn_templates/storage-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}storage-stack.yaml"
+          aws s3 cp cfn_templates/persistent-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}persistent-stack.yaml"
           echo "TEMPLATES_BUCKET=${TEMPLATES_BUCKET}" >> "${GITHUB_ENV}"
 
       - name: Deploy master stack
@@ -75,7 +75,7 @@ jobs:
               TemplateS3Bucket="${TEMPLATES_BUCKET}" \
               TemplateS3Prefix="${TEMPLATES_S3_PREFIX}" \
               ComputeResourcePrefix="${COMPUTE_RESOURCE_PREFIX}" \
-              StorageResourcePrefix="${STORAGE_RESOURCE_PREFIX}" \
+              PersistentResourcePrefix="${PERSISTENT_RESOURCE_PREFIX}" \
             --no-fail-on-empty-changeset
 
       - name: Upload index.html to S3

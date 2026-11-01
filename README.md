@@ -4,7 +4,7 @@ Minimal Lambda on AWS Free Tier, provisioned with the **compute** CloudFormation
 
 See **[NOTES.md](./NOTES.md)** for a feature-by-feature learning log (add new sections there when you extend the project).
 
-Templates live in **`cfn_templates/`**. **GitHub CD** deploys the **master stack** (`simple-master-dev`), which creates nested compute and storage stacks.
+Templates live in **`cfn_templates/`**. **GitHub CD** deploys the **master stack** (`simple-master-dev`), which creates nested compute and persistent stacks.
 
 ## AWS CLI
 
@@ -22,7 +22,7 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 | `AWS::IAM::Role` | Lets Lambda run and write to CloudWatch Logs |
 | `AWS::Lambda::Function` | Your Python handler (`index.handler`) |
 
-## Storage stack (`cfn_templates/storage-stack.yaml`)
+## Persistent stack (`cfn_templates/persistent-stack.yaml`)
 
 | Resource | Purpose |
 |----------|---------|
@@ -39,7 +39,7 @@ curl.exe -sS -I "https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/" | findstr /i co
 
 ## Deploy with AWS CLI
 
-**Master stack (compute + storage):**
+**Master stack (compute + persistent):**
 
 ```powershell
 cd "C:\Projects\AWS_learn\Simple lambda"
@@ -47,7 +47,7 @@ $ACCOUNT = aws sts get-caller-identity --query Account --output text
 $TEMPLATES_BUCKET = "simple-lambda-cfn-$ACCOUNT"
 aws s3 mb "s3://$TEMPLATES_BUCKET" --region ap-south-1 2>$null
 aws s3 cp cfn_templates/compute-stack.yaml "s3://$TEMPLATES_BUCKET/templates/compute-stack.yaml" --region ap-south-1
-aws s3 cp cfn_templates/storage-stack.yaml "s3://$TEMPLATES_BUCKET/templates/storage-stack.yaml" --region ap-south-1
+aws s3 cp cfn_templates/persistent-stack.yaml "s3://$TEMPLATES_BUCKET/templates/persistent-stack.yaml" --region ap-south-1
 aws cloudformation deploy `
   --template-file cfn_templates/master-stack.yaml `
   --stack-name simple-master-dev `
@@ -73,8 +73,8 @@ aws cloudformation deploy `
   --capabilities CAPABILITY_IAM
 
 aws cloudformation deploy `
-  --template-file cfn_templates/storage-stack.yaml `
-  --stack-name simple-storage-dev
+  --template-file cfn_templates/persistent-stack.yaml `
+  --stack-name simple-persistent-dev
 ```
 
 ## Test

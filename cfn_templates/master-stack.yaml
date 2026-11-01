@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Master stack - nested compute and storage stacks
+Description: Master stack - nested compute and persistent stacks
 
 Parameters:
   TemplateS3Bucket:
     Type: String
-    Description: S3 bucket that holds nested stack templates (compute-stack.yaml, storage-stack.yaml)
+    Description: S3 bucket that holds nested stack templates (compute-stack.yaml, persistent-stack.yaml)
   TemplateS3Prefix:
     Type: String
     Default: templates/
@@ -13,10 +13,10 @@ Parameters:
     Type: String
     Default: simple-compute-dev
     Description: Lambda/log naming prefix (same as standalone compute stack name)
-  StorageResourcePrefix:
+  PersistentResourcePrefix:
     Type: String
-    Default: simple-storage-dev
-    Description: S3/CloudFront naming prefix (same as standalone storage stack name)
+    Default: simple-persistent-dev
+    Description: S3/CloudFront naming prefix (same as standalone persistent stack name)
 
 Resources:
   ComputeStack:
@@ -27,12 +27,12 @@ Resources:
         ResourceNamePrefix: !Ref ComputeResourcePrefix
       TimeoutInMinutes: 15
 
-  StorageStack:
+  PersistentStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}storage-stack.yaml'
+      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}persistent-stack.yaml'
       Parameters:
-        ResourceNamePrefix: !Ref StorageResourcePrefix
+        ResourceNamePrefix: !Ref PersistentResourcePrefix
       TimeoutInMinutes: 60
 
 Outputs:
@@ -46,16 +46,16 @@ Outputs:
 
   BucketName:
     Description: S3 bucket for static site
-    Value: !GetAtt StorageStack.Outputs.BucketName
+    Value: !GetAtt PersistentStack.Outputs.BucketName
 
   WebsiteURL:
     Description: S3 website URL (no CSP header)
-    Value: !GetAtt StorageStack.Outputs.WebsiteURL
+    Value: !GetAtt PersistentStack.Outputs.WebsiteURL
 
   CloudFrontURL:
     Description: HTTPS URL with CSP response header
-    Value: !GetAtt StorageStack.Outputs.CloudFrontURL
+    Value: !GetAtt PersistentStack.Outputs.CloudFrontURL
 
   CloudFrontDistributionId:
     Description: CloudFront distribution ID for cache invalidation
-    Value: !GetAtt StorageStack.Outputs.CloudFrontDistributionId
+    Value: !GetAtt PersistentStack.Outputs.CloudFrontDistributionId

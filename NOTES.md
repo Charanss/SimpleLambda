@@ -2,9 +2,7 @@
 
 Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).  
 **Default region:** `ap-south-1` (Mumbai)  
-**CloudFormation templates:** `cfn_templates/` (`compute-stack.yaml`, `storage-stack.yaml`)
-
-**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`** (nested), `compute-stack.yaml`, `storage-stack.yaml`
+**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`** (nested), `compute-stack.yaml`, `persistent-stack.yaml`
 
 ---
 
@@ -15,15 +13,15 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 **What we did**
 
-- **Nested stacks:** master deploys compute + storage child templates from S3.
+- **Nested stacks:** master deploys compute + persistent child templates from S3.
 - CD uploads child YAML to `s3://simple-lambda-cfn-{AccountId}/templates/` then deploys master.
-- Child stacks use **`ResourceNamePrefix`** so Lambda/S3 names stay `simple-compute-dev-hello` and `simple-storage-dev-{AccountId}`.
+- Child stacks use **`ResourceNamePrefix`** so Lambda/S3 names stay `simple-compute-dev-hello` and `simple-persistent-dev-{AccountId}`.
 - All outputs (Lambda, bucket, **CloudFrontURL**, etc.) on the **master** stack.
 
 **How to verify**
 
 - CloudFormation → **`simple-master-dev`** → **Outputs** (region **ap-south-1**).
-- Nested stacks appear as **`simple-master-dev-ComputeStack-*`** and **`StorageStack-*`**.
+- Nested stacks appear as **`simple-master-dev-ComputeStack-*`** and **`PersistentStack-*`**.
 
 **Notes**
 
@@ -64,7 +62,7 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 - **CI:** `cfn-lint` on template changes (no AWS deploy).
 - **CD:** `aws cloudformation deploy` using repo secrets (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`); manual run auth default `access-keys`.
-- Stack names from workflow `env`: `COMPUTE_STACK_NAME`, `STORAGE_STACK_NAME`.
+- Stack names from workflow `env`: `MASTER_STACK_NAME`, `COMPUTE_RESOURCE_PREFIX`, `PERSISTENT_RESOURCE_PREFIX`.
 - AWS account for deploy = account that owns the access keys (no separate account ID in GitHub).
 
 **How to verify**
@@ -78,11 +76,11 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 ---
 
-## Storage stack (S3 static site)
+## Persistent stack (S3 static site)
 
 **Date:** After compute  
-**Stack name:** `simple-storage-dev`  
-**Template:** `cfn_templates/storage-stack.yaml`  
+**Stack name:** `simple-persistent-dev` (standalone) or via master  
+**Template:** `cfn_templates/persistent-stack.yaml`  
 **Content:** `static/index.html` (inline `<script>`)
 
 **What we did**
@@ -106,7 +104,7 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 ## CloudFront + CSP response header
 
 **Date:** Edge / security header feature  
-**Stack:** same `simple-storage-dev` (not a separate “network stack”)  
+**Stack:** `simple-persistent-dev` / nested **PersistentStack** (not a separate “network stack”)  
 **Resources:** `SiteCspHeadersPolicy`, `SiteDistribution`
 
 **What we did**
@@ -139,7 +137,7 @@ Copy this block for each new feature:
 ## [Feature name]
 
 **Date:** YYYY-MM-DD  
-**Stack / service:** (e.g. `simple-storage-dev`, new template name)  
+**Stack / service:** (e.g. `simple-persistent-dev`, new template name)  
 **Files changed:** (templates, workflows, static assets)
 
 **What we did**
