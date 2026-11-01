@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Network stack - CloudFront with Lambda@Edge from compute stack
+Description: Network stack - CloudFront (nested under master, same region as master) + Lambda@Edge associations
 
 Parameters:
   ResourceNamePrefix:
@@ -11,12 +11,17 @@ Parameters:
   EdgeLambdaVersionArn:
     Type: String
     Description: Lambda@Edge version ARN from compute stack (us-east-1)
+  WebACLArn:
+    Type: String
+    Default: ''
+    Description: Optional WAFv2 web ACL ARN (from waf-stack in us-east-1)
 
 Conditions:
   UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
+  UseWebACL: !Not [!Equals [!Ref WebACLArn, '']]
 
 Resources:
-  # Global CDN in front of the S3 website origin (deploy this stack in us-east-1 with edge Lambda ARN).
+  # Global CDN in front of the S3 website origin (nested under master; edge Lambda ARN from us-east-1).
   SiteDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -27,6 +32,10 @@ Resources:
           - !Sub '${AWS::StackName} CDN (edge Lambda from compute stack)'
         Enabled: true
         DefaultRootObject: index.html
+        WebACLId: !If
+          - UseWebACL
+          - !Ref WebACLArn
+          - !Ref AWS::NoValue
         HttpVersion: http2and3
         PriceClass: PriceClass_200
         # Custom origin (not S3 REST API): hostname from persistent stack WebsiteOriginDomainName.
@@ -57,3 +66,7 @@ Outputs:
 
   CloudFrontDistributionId:
     Value: !Ref SiteDistribution
+
+  CloudFrontDistributionArn:
+    Description: Pass to waf-stack (us-east-1) for Web ACL association
+    Value: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}'

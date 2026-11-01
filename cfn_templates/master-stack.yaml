@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Master stack - nested compute and persistent stacks (network stack deployed separately in us-east-1)
+Description: Master stack - nested compute, persistent, and network (Lambda@Edge ARN from us-east-1 compute stack)
 
 Parameters:
   TemplateS3Bucket:
@@ -15,6 +15,20 @@ Parameters:
   PersistentResourcePrefix:
     Type: String
     Default: simple-persistent-dev
+  NetworkResourcePrefix:
+    Type: String
+    Default: simple-network-dev
+  EdgeLambdaVersionArn:
+    Type: String
+    Default: ''
+    Description: Lambda@Edge version from compute stack in us-east-1; omit to skip NetworkStack
+  WebACLArn:
+    Type: String
+    Default: ''
+    Description: WAFv2 web ACL ARN from waf-stack (us-east-1); attach to CloudFront via WebACLId
+
+Conditions:
+  DeployNetwork: !Not [!Equals [!Ref EdgeLambdaVersionArn, '']]
 
 Resources:
   # Nested stack: regional Python hello Lambda + IAM + log group (same region as master).
@@ -37,6 +51,20 @@ Resources:
         ResourceNamePrefix: !Ref PersistentResourcePrefix
       TimeoutInMinutes: 30
 
+  # Nested stack: CloudFront in the same region as master (ap-south-1); edge function ARN is from us-east-1 only.
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: DeployNetwork
+    DependsOn: PersistentStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}network-stack.yaml'
+      Parameters:
+        ResourceNamePrefix: !Ref NetworkResourcePrefix
+        OriginDomainName: !GetAtt PersistentStack.Outputs.WebsiteOriginDomainName
+        EdgeLambdaVersionArn: !Ref EdgeLambdaVersionArn
+        WebACLArn: !Ref WebACLArn
+      TimeoutInMinutes: 30
+
 Outputs:
   FunctionName:
     Value: !GetAtt ComputeStack.Outputs.FunctionName
@@ -51,5 +79,20 @@ Outputs:
     Value: !GetAtt PersistentStack.Outputs.WebsiteURL
 
   WebsiteOriginDomainName:
-    Description: Pass to network-stack (CloudFront origin)
+    Description: S3 website hostname used as CloudFront origin
     Value: !GetAtt PersistentStack.Outputs.WebsiteOriginDomainName
+
+  CloudFrontURL:
+    Condition: DeployNetwork
+    Description: HTTPS site URL (CSP/HSTS via Lambda@Edge on origin-response)
+    Value: !GetAtt NetworkStack.Outputs.CloudFrontURL
+
+  CloudFrontDistributionId:
+    Condition: DeployNetwork
+    Description: Use for cache invalidation after uploading index.html
+    Value: !GetAtt NetworkStack.Outputs.CloudFrontDistributionId
+
+  CloudFrontDistributionArn:
+    Condition: DeployNetwork
+    Description: Pass to waf-stack in us-east-1
+    Value: !GetAtt NetworkStack.Outputs.CloudFrontDistributionArn

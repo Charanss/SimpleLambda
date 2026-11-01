@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: WAF web ACL for CloudFront - block probe and backup/archive paths with HTTP 400 (deploy in us-east-1; attach ARN on distribution)
+
+Parameters:
+  ResourceNamePrefix:
+    Type: String
+    Default: simple-waf-dev
+
+Resources:
+  # CLOUDFRONT scope ACL must be created in us-east-1. Associate via network-stack WebACLId (not WebACLAssociation).
+  BlockedPathsWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${ResourceNamePrefix}-blocked-paths'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      CustomResponseBodies:
+        badRequestPlain:
+          ContentType: TEXT_PLAIN
+          Content: Bad Request
+      Rules:
+        - Name: BlockAdminProbePaths
+          Priority: 0
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 400
+                CustomResponseBodyKey: badRequestPlain
+          Statement:
+            RegexMatchStatement:
+              FieldToMatch:
+                UriPath: {}
+              RegexString: '^/(admin|secret|\\.env|wp-admin)(/|$)'
+              TextTransformations:
+                - Priority: 0
+                  Type: URL_DECODE
+                - Priority: 1
+                  Type: LOWERCASE
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ResourceNamePrefix}-admin-probes'
+        - Name: BlockBackupArchivePaths
+          Priority: 1
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 400
+                CustomResponseBodyKey: badRequestPlain
+          Statement:
+            RegexMatchStatement:
+              FieldToMatch:
+                UriPath: {}
+              RegexString: '(^|/)[^?#]*\\.(bak|old|zip|backup)(/|$)|(^|/)backup(/|$)'
+              TextTransformations:
+                - Priority: 0
+                  Type: URL_DECODE
+                - Priority: 1
+                  Type: LOWERCASE
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: !Sub '${ResourceNamePrefix}-backup-archive'
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${ResourceNamePrefix}-web-acl'
+
+Outputs:
+  WebACLArn:
+    Description: Set network-stack WebACLId / master WebACLArn parameter
+    Value: !GetAtt BlockedPathsWebACL.Arn

@@ -1,5 +1,8 @@
 name: CD
 
+# Sole AWS deploy path: push to main (when paths below change) or manual "Run workflow" here.
+# Do not deploy stacks from a local CLI or CloudFormation console for this project.
+
 on:
   workflow_dispatch:
     inputs:
@@ -21,12 +24,13 @@ on:
 env:
   AWS_REGION: ap-south-1
   COMPUTE_EDGE_STACK_NAME: simple-compute-dev-edge
-  NETWORK_STACK_REGION: us-east-1
+  COMPUTE_EDGE_REGION: us-east-1
   MASTER_STACK_NAME: simple-master-dev
-  NETWORK_STACK_NAME: simple-network-dev
   COMPUTE_RESOURCE_PREFIX: simple-compute-dev
   PERSISTENT_RESOURCE_PREFIX: simple-persistent-dev
   NETWORK_RESOURCE_PREFIX: simple-network-dev
+  WAF_STACK_NAME: simple-waf-dev
+  WAF_RESOURCE_PREFIX: simple-waf-dev
   TEMPLATES_S3_PREFIX: templates/
 
 permissions:
@@ -70,7 +74,42 @@ jobs:
           aws s3 cp cfn_templates/network-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}network-stack.yaml"
           echo "TEMPLATES_BUCKET=${TEMPLATES_BUCKET}" >> "${GITHUB_ENV}"
 
-      - name: Deploy master stack (compute + persistent)
+      - name: Deploy compute edge Lambda (us-east-1)
+        run: |
+          aws cloudformation deploy \
+            --template-file cfn_templates/compute-stack.yaml \
+            --stack-name "${COMPUTE_EDGE_STACK_NAME}" \
+            --region "${COMPUTE_EDGE_REGION}" \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              ResourceNamePrefix="${COMPUTE_RESOURCE_PREFIX}" \
+              EnableRegionalApp=false \
+              EnableEdgeFunction=true \
+            --no-fail-on-empty-changeset
+          EDGE_ARN=$(aws cloudformation describe-stacks \
+            --stack-name "${COMPUTE_EDGE_STACK_NAME}" \
+            --region "${COMPUTE_EDGE_REGION}" \
+            --query "Stacks[0].Outputs[?OutputKey=='EdgeLambdaVersionArn'].OutputValue" \
+            --output text)
+          echo "EDGE_LAMBDA_VERSION_ARN=${EDGE_ARN}" >> "${GITHUB_ENV}"
+
+      - name: Deploy WAF web ACL (us-east-1)
+        run: |
+          aws cloudformation deploy \
+            --template-file cfn_templates/waf-stack.yaml \
+            --stack-name "${WAF_STACK_NAME}" \
+            --region "${COMPUTE_EDGE_REGION}" \
+            --parameter-overrides \
+              ResourceNamePrefix="${WAF_RESOURCE_PREFIX}" \
+            --no-fail-on-empty-changeset
+          WAF_ARN=$(aws cloudformation describe-stacks \
+            --stack-name "${WAF_STACK_NAME}" \
+            --region "${COMPUTE_EDGE_REGION}" \
+            --query "Stacks[0].Outputs[?OutputKey=='WebACLArn'].OutputValue" \
+            --output text)
+          echo "WEB_ACL_ARN=${WAF_ARN}" >> "${GITHUB_ENV}"
+
+      - name: Deploy master stack (compute + persistent + network)
         run: |
           aws cloudformation deploy \
             --template-file cfn_templates/master-stack.yaml \
@@ -82,42 +121,9 @@ jobs:
               TemplateS3Prefix="${TEMPLATES_S3_PREFIX}" \
               ComputeResourcePrefix="${COMPUTE_RESOURCE_PREFIX}" \
               PersistentResourcePrefix="${PERSISTENT_RESOURCE_PREFIX}" \
-            --no-fail-on-empty-changeset
-
-      - name: Deploy compute edge Lambda (us-east-1)
-        run: |
-          aws cloudformation deploy \
-            --template-file cfn_templates/compute-stack.yaml \
-            --stack-name "${COMPUTE_EDGE_STACK_NAME}" \
-            --region "${NETWORK_STACK_REGION}" \
-            --capabilities CAPABILITY_IAM \
-            --parameter-overrides \
-              ResourceNamePrefix="${COMPUTE_RESOURCE_PREFIX}" \
-              EnableRegionalApp=false \
-              EnableEdgeFunction=true \
-            --no-fail-on-empty-changeset
-          EDGE_ARN=$(aws cloudformation describe-stacks \
-            --stack-name "${COMPUTE_EDGE_STACK_NAME}" \
-            --region "${NETWORK_STACK_REGION}" \
-            --query "Stacks[0].Outputs[?OutputKey=='EdgeLambdaVersionArn'].OutputValue" \
-            --output text)
-          echo "EDGE_LAMBDA_VERSION_ARN=${EDGE_ARN}" >> "${GITHUB_ENV}"
-
-      - name: Deploy network stack (CloudFront, us-east-1)
-        run: |
-          ORIGIN=$(aws cloudformation describe-stacks \
-            --stack-name "${MASTER_STACK_NAME}" \
-            --region "${AWS_REGION}" \
-            --query "Stacks[0].Outputs[?OutputKey=='WebsiteOriginDomainName'].OutputValue" \
-            --output text)
-          aws cloudformation deploy \
-            --template-file cfn_templates/network-stack.yaml \
-            --stack-name "${NETWORK_STACK_NAME}" \
-            --region "${NETWORK_STACK_REGION}" \
-            --parameter-overrides \
-              OriginDomainName="${ORIGIN}" \
-              ResourceNamePrefix="${NETWORK_RESOURCE_PREFIX}" \
+              NetworkResourcePrefix="${NETWORK_RESOURCE_PREFIX}" \
               EdgeLambdaVersionArn="${EDGE_LAMBDA_VERSION_ARN}" \
+              WebACLArn="${WEB_ACL_ARN}" \
             --no-fail-on-empty-changeset
 
       - name: Upload index.html to S3
@@ -133,8 +139,8 @@ jobs:
       - name: Invalidate CloudFront cache
         run: |
           DIST_ID=$(aws cloudformation describe-stacks \
-            --stack-name "${NETWORK_STACK_NAME}" \
-            --region "${NETWORK_STACK_REGION}" \
+            --stack-name "${MASTER_STACK_NAME}" \
+            --region "${AWS_REGION}" \
             --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
             --output text)
           aws cloudfront create-invalidation \
@@ -152,12 +158,12 @@ jobs:
           echo "=== Compute edge (us-east-1) ==="
           aws cloudformation describe-stacks \
             --stack-name "${COMPUTE_EDGE_STACK_NAME}" \
-            --region "${NETWORK_STACK_REGION}" \
+            --region "${COMPUTE_EDGE_REGION}" \
             --query "Stacks[0].Outputs" \
             --output table
-          echo "=== Network (us-east-1) ==="
+          echo "=== WAF (us-east-1) ==="
           aws cloudformation describe-stacks \
-            --stack-name "${NETWORK_STACK_NAME}" \
-            --region "${NETWORK_STACK_REGION}" \
+            --stack-name "${WAF_STACK_NAME}" \
+            --region "${COMPUTE_EDGE_REGION}" \
             --query "Stacks[0].Outputs" \
             --output table
