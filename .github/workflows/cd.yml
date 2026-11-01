@@ -4,6 +4,13 @@ name: CD
 
 on:
   workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_ROLE_ARN:
+        required: false
   workflow_dispatch:
     inputs:
       auth:
@@ -46,7 +53,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (access keys)
-        if: github.event_name == 'workflow_call' || (github.event_name == 'workflow_dispatch' && github.event.inputs.auth == 'access-keys')
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.auth == 'access-keys'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
