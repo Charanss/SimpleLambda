@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Storage stack - S3 static website bucket for index.html
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${AWS::StackName}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+
+Outputs:
+  BucketName:
+    Description: S3 bucket name (upload index.html here)
+    Value: !Ref SiteBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  WebsiteURL:
+    Description: Static website URL (after index.html is uploaded)
+    Value: !GetAtt SiteBucket.WebsiteURL

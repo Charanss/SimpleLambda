@@ -18,6 +18,15 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 | `AWS::IAM::Role` | Lets Lambda run and write to CloudWatch Logs |
 | `AWS::Lambda::Function` | Your Python handler (`index.handler`) |
 
+## Storage stack (`storage-stack.yaml`)
+
+| Resource | Purpose |
+|----------|---------|
+| `AWS::S3::Bucket` | Static website bucket |
+| `static/index.html` | Page with **inline `<script>`**; uploaded by CD / CLI |
+
+After deploy, upload (if not using CD) and open **WebsiteURL** from stack Outputs in **ap-south-1**.
+
 ## Deploy with AWS CLI
 
 ```powershell
@@ -27,6 +36,14 @@ aws cloudformation deploy `
   --template-file compute-stack.yaml `
   --stack-name simple-compute-dev `
   --capabilities CAPABILITY_IAM
+
+aws cloudformation deploy `
+  --template-file storage-stack.yaml `
+  --stack-name simple-storage-dev
+
+$BUCKET = aws cloudformation describe-stacks --stack-name simple-storage-dev `
+  --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
+aws s3 cp static/index.html "s3://$BUCKET/index.html" --content-type "text/html; charset=utf-8"
 ```
 
 ## Test

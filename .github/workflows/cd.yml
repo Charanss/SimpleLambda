@@ -15,11 +15,14 @@ on:
       - main
     paths:
       - compute-stack.yaml
+      - storage-stack.yaml
+      - static/**
       - .github/workflows/cd.yml
 
 env:
   AWS_REGION: ap-south-1
-  STACK_NAME: simple-compute-dev
+  COMPUTE_STACK_NAME: simple-compute-dev
+  STORAGE_STACK_NAME: simple-storage-dev
 
 permissions:
   id-token: write
@@ -47,17 +50,39 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy CloudFormation stack
+      - name: Deploy compute stack
         run: |
           aws cloudformation deploy \
             --template-file compute-stack.yaml \
-            --stack-name "${STACK_NAME}" \
+            --stack-name "${COMPUTE_STACK_NAME}" \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
 
+      - name: Deploy storage stack
+        run: |
+          aws cloudformation deploy \
+            --template-file storage-stack.yaml \
+            --stack-name "${STORAGE_STACK_NAME}" \
+            --no-fail-on-empty-changeset
+
+      - name: Upload index.html to S3
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name "${STORAGE_STACK_NAME}" \
+            --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" \
+            --output text)
+          aws s3 cp static/index.html "s3://${BUCKET}/index.html" \
+            --content-type "text/html; charset=utf-8"
+
       - name: Stack outputs
         run: |
+          echo "=== Compute ==="
           aws cloudformation describe-stacks \
-            --stack-name "${STACK_NAME}" \
+            --stack-name "${COMPUTE_STACK_NAME}" \
+            --query "Stacks[0].Outputs" \
+            --output table
+          echo "=== Storage ==="
+          aws cloudformation describe-stacks \
+            --stack-name "${STORAGE_STACK_NAME}" \
             --query "Stacks[0].Outputs" \
             --output table
