@@ -4,7 +4,30 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 **Default region:** `ap-south-1` (Mumbai)  
 **CloudFormation templates:** `cfn_templates/` (`compute-stack.yaml`, `storage-stack.yaml`)
 
-When you add a feature, copy the **New feature template** at the bottom into a new dated section above it.
+**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`** (nested), `compute-stack.yaml`, `storage-stack.yaml`
+
+---
+
+## Master stack (recommended)
+
+**Stack name:** `simple-master-dev`  
+**Template:** `cfn_templates/master-stack.yaml`
+
+**What we did**
+
+- **Nested stacks:** master deploys compute + storage child templates from S3.
+- CD uploads child YAML to `s3://simple-lambda-cfn-{AccountId}/templates/` then deploys master.
+- Child stacks use **`ResourceNamePrefix`** so Lambda/S3 names stay `simple-compute-dev-hello` and `simple-storage-dev-{AccountId}`.
+- All outputs (Lambda, bucket, **CloudFrontURL**, etc.) on the **master** stack.
+
+**How to verify**
+
+- CloudFormation → **`simple-master-dev`** → **Outputs** (region **ap-south-1**).
+- Nested stacks appear as **`simple-master-dev-ComputeStack-*`** and **`StorageStack-*`**.
+
+**Notes**
+
+- Nested templates must be in S3 (`TemplateURL`); master is deployed from the repo file.
 
 ---
 

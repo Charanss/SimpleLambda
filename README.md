@@ -4,6 +4,8 @@ Minimal Lambda on AWS Free Tier, provisioned with the **compute** CloudFormation
 
 See **[NOTES.md](./NOTES.md)** for a feature-by-feature learning log (add new sections there when you extend the project).
 
+Templates live in **`cfn_templates/`**. **GitHub CD** deploys the **master stack** (`simple-master-dev`), which creates nested compute and storage stacks.
+
 ## AWS CLI
 
 **Recommended (CLI v2):** In PowerShell, run `winget install -e Amazon.AWSCLI` and accept the UAC prompt.
@@ -37,9 +39,34 @@ curl.exe -sS -I "https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/" | findstr /i co
 
 ## Deploy with AWS CLI
 
+**Master stack (compute + storage):**
+
 ```powershell
 cd "C:\Projects\AWS_learn\Simple lambda"
+$ACCOUNT = aws sts get-caller-identity --query Account --output text
+$TEMPLATES_BUCKET = "simple-lambda-cfn-$ACCOUNT"
+aws s3 mb "s3://$TEMPLATES_BUCKET" --region ap-south-1 2>$null
+aws s3 cp cfn_templates/compute-stack.yaml "s3://$TEMPLATES_BUCKET/templates/compute-stack.yaml" --region ap-south-1
+aws s3 cp cfn_templates/storage-stack.yaml "s3://$TEMPLATES_BUCKET/templates/storage-stack.yaml" --region ap-south-1
+aws cloudformation deploy `
+  --template-file cfn_templates/master-stack.yaml `
+  --stack-name simple-master-dev `
+  --region ap-south-1 `
+  --capabilities CAPABILITY_IAM `
+  --parameter-overrides TemplateS3Bucket=$TEMPLATES_BUCKET TemplateS3Prefix=templates/
 
+$MASTER = simple-master-dev
+$BUCKET = aws cloudformation describe-stacks --stack-name $MASTER --region ap-south-1 `
+  --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
+aws s3 cp static/index.html "s3://$BUCKET/index.html" --content-type "text/html; charset=utf-8" --region ap-south-1
+$DIST_ID = aws cloudformation describe-stacks --stack-name $MASTER --region ap-south-1 `
+  --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text
+aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/index.html" "/"
+```
+
+**Optional — deploy child stacks alone:**
+
+```powershell
 aws cloudformation deploy `
   --template-file cfn_templates/compute-stack.yaml `
   --stack-name simple-compute-dev `
@@ -48,14 +75,6 @@ aws cloudformation deploy `
 aws cloudformation deploy `
   --template-file cfn_templates/storage-stack.yaml `
   --stack-name simple-storage-dev
-
-$BUCKET = aws cloudformation describe-stacks --stack-name simple-storage-dev `
-  --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
-aws s3 cp static/index.html "s3://$BUCKET/index.html" --content-type "text/html; charset=utf-8"
-
-$DIST_ID = aws cloudformation describe-stacks --stack-name simple-storage-dev `
-  --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text
-aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/index.html" "/"
 ```
 
 ## Test
@@ -90,7 +109,7 @@ Workflows live under `.github/workflows/`.
 | File | Type | What it does |
 |------|------|----------------|
 | **`ci.yml`** | **CI** | Runs `cfn-lint` on templates under **`cfn_templates/`** — no AWS deploy |
-| **`cd.yml`** | **CD** | `aws cloudformation deploy` to **`simple-compute-dev`** |
+| **`cd.yml`** | **CD** | Upload child templates to S3, deploy **`simple-master-dev`**, upload `index.html`, invalidate CloudFront |
 
 **CD triggers:** push to `main` when the template or `cd.yml` changes (uses **OIDC**), or manual **Run workflow**.
 

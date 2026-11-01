@@ -6,12 +6,22 @@ Parameters:
     Type: String
     Default: hello
     Description: Suffix for the Lambda function name (full name is stack-name-suffix)
+  ResourceNamePrefix:
+    Type: String
+    Default: ''
+    Description: Optional fixed prefix for names (used by master stack); empty uses AWS::StackName
+
+Conditions:
+  UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
 
 Resources:
   HelloLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-${FunctionNameSuffix}'
+      LogGroupName: !If
+        - UseResourceNamePrefix
+        - !Sub '/aws/lambda/${ResourceNamePrefix}-${FunctionNameSuffix}'
+        - !Sub '/aws/lambda/${AWS::StackName}-${FunctionNameSuffix}'
       RetentionInDays: 7
 
   HelloLambdaRole:
@@ -31,7 +41,10 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn: HelloLogGroup
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-${FunctionNameSuffix}'
+      FunctionName: !If
+        - UseResourceNamePrefix
+        - !Sub '${ResourceNamePrefix}-${FunctionNameSuffix}'
+        - !Sub '${AWS::StackName}-${FunctionNameSuffix}'
       Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt HelloLambdaRole.Arn

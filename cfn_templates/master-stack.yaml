@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Master stack - nested compute and storage stacks
+
+Parameters:
+  TemplateS3Bucket:
+    Type: String
+    Description: S3 bucket that holds nested stack templates (compute-stack.yaml, storage-stack.yaml)
+  TemplateS3Prefix:
+    Type: String
+    Default: templates/
+    Description: Key prefix in the bucket (must end with /)
+  ComputeResourcePrefix:
+    Type: String
+    Default: simple-compute-dev
+    Description: Lambda/log naming prefix (same as standalone compute stack name)
+  StorageResourcePrefix:
+    Type: String
+    Default: simple-storage-dev
+    Description: S3/CloudFront naming prefix (same as standalone storage stack name)
+
+Resources:
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}compute-stack.yaml'
+      Parameters:
+        ResourceNamePrefix: !Ref ComputeResourcePrefix
+      TimeoutInMinutes: 15
+
+  StorageStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}storage-stack.yaml'
+      Parameters:
+        ResourceNamePrefix: !Ref StorageResourcePrefix
+      TimeoutInMinutes: 60
+
+Outputs:
+  FunctionName:
+    Description: Lambda function name
+    Value: !GetAtt ComputeStack.Outputs.FunctionName
+
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt ComputeStack.Outputs.FunctionArn
+
+  BucketName:
+    Description: S3 bucket for static site
+    Value: !GetAtt StorageStack.Outputs.BucketName
+
+  WebsiteURL:
+    Description: S3 website URL (no CSP header)
+    Value: !GetAtt StorageStack.Outputs.WebsiteURL
+
+  CloudFrontURL:
+    Description: HTTPS URL with CSP response header
+    Value: !GetAtt StorageStack.Outputs.CloudFrontURL
+
+  CloudFrontDistributionId:
+    Description: CloudFront distribution ID for cache invalidation
+    Value: !GetAtt StorageStack.Outputs.CloudFrontDistributionId

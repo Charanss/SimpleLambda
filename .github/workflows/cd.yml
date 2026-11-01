@@ -20,8 +20,10 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  COMPUTE_STACK_NAME: simple-compute-dev
-  STORAGE_STACK_NAME: simple-storage-dev
+  MASTER_STACK_NAME: simple-master-dev
+  COMPUTE_RESOURCE_PREFIX: simple-compute-dev
+  STORAGE_RESOURCE_PREFIX: simple-storage-dev
+  TEMPLATES_S3_PREFIX: templates/
 
 permissions:
   id-token: write
@@ -49,25 +51,37 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy compute stack
+      - name: Upload nested templates to S3
         run: |
-          aws cloudformation deploy \
-            --template-file cfn_templates/compute-stack.yaml \
-            --stack-name "${COMPUTE_STACK_NAME}" \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          TEMPLATES_BUCKET="simple-lambda-cfn-${ACCOUNT_ID}"
+          if ! aws s3api head-bucket --bucket "${TEMPLATES_BUCKET}" 2>/dev/null; then
+            aws s3api create-bucket \
+              --bucket "${TEMPLATES_BUCKET}" \
+              --region "${AWS_REGION}" \
+              --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
+          fi
+          aws s3 cp cfn_templates/compute-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}compute-stack.yaml"
+          aws s3 cp cfn_templates/storage-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}storage-stack.yaml"
+          echo "TEMPLATES_BUCKET=${TEMPLATES_BUCKET}" >> "${GITHUB_ENV}"
 
-      - name: Deploy storage stack
+      - name: Deploy master stack
         run: |
           aws cloudformation deploy \
-            --template-file cfn_templates/storage-stack.yaml \
-            --stack-name "${STORAGE_STACK_NAME}" \
+            --template-file cfn_templates/master-stack.yaml \
+            --stack-name "${MASTER_STACK_NAME}" \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              TemplateS3Bucket="${TEMPLATES_BUCKET}" \
+              TemplateS3Prefix="${TEMPLATES_S3_PREFIX}" \
+              ComputeResourcePrefix="${COMPUTE_RESOURCE_PREFIX}" \
+              StorageResourcePrefix="${STORAGE_RESOURCE_PREFIX}" \
             --no-fail-on-empty-changeset
 
       - name: Upload index.html to S3
         run: |
           BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name "${STORAGE_STACK_NAME}" \
+            --stack-name "${MASTER_STACK_NAME}" \
             --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" \
             --output text)
           aws s3 cp static/index.html "s3://${BUCKET}/index.html" \
@@ -76,7 +90,7 @@ jobs:
       - name: Invalidate CloudFront cache
         run: |
           DIST_ID=$(aws cloudformation describe-stacks \
-            --stack-name "${STORAGE_STACK_NAME}" \
+            --stack-name "${MASTER_STACK_NAME}" \
             --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
             --output text)
           aws cloudfront create-invalidation \
@@ -85,13 +99,7 @@ jobs:
 
       - name: Stack outputs
         run: |
-          echo "=== Compute ==="
           aws cloudformation describe-stacks \
-            --stack-name "${COMPUTE_STACK_NAME}" \
-            --query "Stacks[0].Outputs" \
-            --output table
-          echo "=== Storage ==="
-          aws cloudformation describe-stacks \
-            --stack-name "${STORAGE_STACK_NAME}" \
+            --stack-name "${MASTER_STACK_NAME}" \
             --query "Stacks[0].Outputs" \
             --output table

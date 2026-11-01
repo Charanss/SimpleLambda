@@ -24,4 +24,4 @@ jobs:
       - name: Lint CloudFormation template
         run: |
           pip install cfn-lint
-          cfn-lint cfn_templates/compute-stack.yaml cfn_templates/storage-stack.yaml
+          cfn-lint cfn_templates/compute-stack.yaml cfn_templates/storage-stack.yaml cfn_templates/master-stack.yaml

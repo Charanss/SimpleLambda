@@ -1,11 +1,23 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: Storage stack - S3 static site with CloudFront CSP response header
 
+Parameters:
+  ResourceNamePrefix:
+    Type: String
+    Default: ''
+    Description: Optional fixed prefix for bucket/policy names (master stack); empty uses AWS::StackName
+
+Conditions:
+  UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
+
 Resources:
   SiteBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-${AWS::AccountId}'
+      BucketName: !If
+        - UseResourceNamePrefix
+        - !Sub '${ResourceNamePrefix}-${AWS::AccountId}'
+        - !Sub '${AWS::StackName}-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
@@ -31,7 +43,10 @@ Resources:
     Type: AWS::CloudFront::ResponseHeadersPolicy
     Properties:
       ResponseHeadersPolicyConfig:
-        Name: !Sub '${AWS::StackName}-csp-headers'
+        Name: !If
+          - UseResourceNamePrefix
+          - !Sub '${ResourceNamePrefix}-csp-headers'
+          - !Sub '${AWS::StackName}-csp-headers'
         Comment: Content-Security-Policy for static index.html
         SecurityHeadersConfig:
           ContentSecurityPolicy:
@@ -42,7 +57,10 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: !Sub '${AWS::StackName} static site via CloudFront'
+        Comment: !If
+          - UseResourceNamePrefix
+          - !Sub '${ResourceNamePrefix} static site via CloudFront'
+          - !Sub '${AWS::StackName} static site via CloudFront'
         Enabled: true
         DefaultRootObject: index.html
         HttpVersion: http2and3
@@ -65,8 +83,6 @@ Outputs:
   BucketName:
     Description: S3 bucket name (upload index.html here)
     Value: !Ref SiteBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-BucketName'
 
   WebsiteURL:
     Description: S3 static website URL (direct, no CSP header)
