@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Compute stack - simple Lambda for Free Tier
+
+Parameters:
+  FunctionNameSuffix:
+    Type: String
+    Default: hello
+    Description: Suffix for the Lambda function name (full name is stack-name-suffix)
+
+Resources:
+  HelloLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-${FunctionNameSuffix}'
+      RetentionInDays: 7
+
+  HelloLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  HelloFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: HelloLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-${FunctionNameSuffix}'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt HelloLambdaRole.Arn
+      Timeout: 10
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import json
+
+          def handler(event, context):
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({
+                      "message": "Hello from CloudFormation + Lambda",
+                      "requestId": context.aws_request_id,
+                  }),
+              }
+
+Outputs:
+  FunctionName:
+    Description: Lambda function name (use for invoke / console)
+    Value: !Ref HelloFunction
+
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt HelloFunction.Arn

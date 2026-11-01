@@ -1,0 +1,63 @@
+name: CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      auth:
+        description: How GitHub authenticates to AWS (manual runs only)
+        type: choice
+        options:
+          - oidc
+          - access-keys
+        default: oidc
+  push:
+    branches:
+      - main
+    paths:
+      - compute-stack.yaml
+      - .github/workflows/cd.yml
+
+env:
+  AWS_REGION: ap-south-1
+  STACK_NAME: simple-compute-dev
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        if: github.event_name == 'push' || inputs.auth == 'oidc'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials (access keys)
+        if: github.event_name == 'workflow_dispatch' && inputs.auth == 'access-keys'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy \
+            --template-file compute-stack.yaml \
+            --stack-name "${STACK_NAME}" \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+
+      - name: Stack outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "${STACK_NAME}" \
+            --query "Stacks[0].Outputs" \
+            --output table
