@@ -2,6 +2,8 @@
 
 Minimal Lambda on AWS Free Tier, provisioned with the **compute** CloudFormation stack.
 
+See **[NOTES.md](./NOTES.md)** for a feature-by-feature learning log (add new sections there when you extend the project).
+
 ## AWS CLI
 
 **Recommended (CLI v2):** In PowerShell, run `winget install -e Amazon.AWSCLI` and accept the UAC prompt.
