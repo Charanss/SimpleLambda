@@ -32,7 +32,7 @@ Resources:
   EdgeSecurityFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-viewer-response'
+      FunctionName: !Sub '${AWS::StackName}-edge-security'
       Runtime: nodejs22.x
       Handler: index.handler
       Role: !GetAtt EdgeSecurityRole.Arn
@@ -41,22 +41,39 @@ Resources:
       Code:
         ZipFile: |
           'use strict';
-          exports.handler = (event, context, callback) => {
-            const response = event.Records[0].cf.response;
-            const headers = response.headers;
-            headers['content-security-policy'] = [{
+          var SECURITY_HEADERS = {
+            'content-security-policy': {
               key: 'Content-Security-Policy',
               value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'"
-            }];
-            headers['strict-transport-security'] = [{
+            },
+            'strict-transport-security': {
               key: 'Strict-Transport-Security',
               value: 'max-age=63072000; includeSubDomains; preload'
-            }];
-            headers['x-content-type-options'] = [{
+            },
+            'x-content-type-options': {
               key: 'X-Content-Type-Options',
               value: 'nosniff'
-            }];
-            callback(null, response);
+            }
+          };
+          function applySecurityHeaders(response) {
+            var headers = response.headers;
+            Object.keys(SECURITY_HEADERS).forEach(function (name) {
+              headers[name] = [SECURITY_HEADERS[name]];
+            });
+            return response;
+          }
+          exports.handler = (event, context, callback) => {
+            var record = event.Records[0].cf;
+            var eventType = record.config.eventType;
+            if (eventType === 'viewer-request') {
+              callback(null, record.request);
+              return;
+            }
+            if (eventType === 'origin-response') {
+              callback(null, applySecurityHeaders(record.response));
+              return;
+            }
+            callback(null, record.response || record.request);
           };
 
   EdgeSecurityVersion:
@@ -66,7 +83,6 @@ Resources:
 
   SiteDistribution:
     Type: AWS::CloudFront::Distribution
-    DependsOn: EdgeSecurityVersion
     Properties:
       DistributionConfig:
         Comment: !If
@@ -90,7 +106,9 @@ Resources:
           Compress: true
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           LambdaFunctionAssociations:
-            - EventType: viewer-response
+            - EventType: viewer-request
+              LambdaFunctionARN: !Ref EdgeSecurityVersion
+            - EventType: origin-response
               LambdaFunctionARN: !Ref EdgeSecurityVersion
 
 Outputs:
@@ -102,6 +120,6 @@ Outputs:
     Description: Distribution ID for cache invalidation
     Value: !Ref SiteDistribution
 
-  ViewerResponseLambdaVersionArn:
-    Description: Lambda@Edge version attached to CloudFront
+  EdgeLambdaVersionArn:
+    Description: Lambda@Edge version (viewer-request + origin-response)
     Value: !Ref EdgeSecurityVersion

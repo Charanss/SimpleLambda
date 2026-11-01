@@ -34,7 +34,7 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 | Resource | Purpose |
 |----------|---------|
 | `AWS::CloudFront::Distribution` | CDN in front of S3 website origin |
-| Lambda@Edge association | **Viewer-response** function adds CSP, HSTS, `X-Content-Type-Options` |
+| Lambda@Edge association | **viewer-request** (pass-through) + **origin-response** (CSP, HSTS, `X-Content-Type-Options`) |
 
 Edge Lambda and CloudFront live in **`cfn_templates/network-stack.yaml`** only (deploy stack **`simple-network-dev`** in **`us-east-1`**).
 
