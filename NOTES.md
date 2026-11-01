@@ -6,6 +6,30 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 ---
 
+## Quick reference (curl)
+
+Replace `YOUR_DIST.cloudfront.net` with **CloudFrontURL** from stack **`simple-master-dev`** (ap-south-1) → **Outputs**. Test the site on **CloudFront**, not direct S3.
+
+```text
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/index.html"
+curl.exe -sS "https://YOUR_DIST.cloudfront.net/index.html"
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/backup"
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/config.bak"
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/archive.old"
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/index.zip"
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/admin"
+```
+
+```text
+curl.exe -sS -I "http://simple-persistent-dev-720685536707.s3-website.ap-south-1.amazonaws.com/index.html"
+```
+
+- **index.html** on CloudFront → **200**; response headers include CSP (with **nonce**), HSTS, nosniff.
+- **backup / .bak / .old / .zip / admin** on CloudFront → **400** (WAF).
+- **S3 website URL** → no CSP, no WAF (origin only).
+
+---
+
 ## Master stack (recommended)
 
 **Stack name:** `simple-master-dev`  
@@ -13,7 +37,7 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 **What we did**
 
-- **Compute stack** (`compute-stack.yaml`): all Lambdas — regional hello (master / ap-south-1) and **edge-security** (`simple-compute-dev-edge` in **us-east-1**).
+- **Compute stack** (`compute-stack.yaml`): regional hello via master; **Lambda@Edge** via **`simple-compute-dev-edge`** (us-east-1), resource prefix **`simple-compute-edge`**.
 - **Network stack** nested in master: CloudFront + **`EdgeLambdaVersionArn`** from **`simple-compute-dev-edge`** (us-east-1).
 - All outputs (Lambda, bucket, **CloudFrontURL**, etc.) on the **master** stack.
 
@@ -60,8 +84,8 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 **What we did**
 
 - **CI:** `cfn-lint` on template changes (no AWS deploy).
-- **CD:** `aws cloudformation deploy` using repo secrets (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`); manual run auth default `access-keys`.
-- Stack names from workflow `env`: `MASTER_STACK_NAME`, `COMPUTE_RESOURCE_PREFIX`, `PERSISTENT_RESOURCE_PREFIX`.
+- **CD:** deploy order edge → WAF → master; upload `index.html`; invalidate CloudFront. See **Quick reference** above for curl commands.
+- Stack names from workflow `env`: `MASTER_STACK_NAME`, `COMPUTE_EDGE_RESOURCE_PREFIX`, `WAF_STACK_NAME`, etc.
 - AWS account for deploy = account that owns the access keys (no separate account ID in GitHub).
 
 **How to verify**
@@ -117,16 +141,34 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 **How to verify**
 
-```powershell
-$URL = aws cloudformation describe-stacks --stack-name simple-master-dev --region ap-south-1 `
-  --query "Stacks[0].Outputs[?OutputKey=='CloudFrontURL'].OutputValue" --output text
-curl.exe -sS -I "$URL" | findstr /i "content-security-policy strict-transport x-content-type"
-```
+- CloudFormation → **`simple-master-dev`** → **Outputs** → copy **CloudFrontURL** into the curl commands in **Quick reference**.
 
 **Notes**
 
 - **CloudFront stack** lives in **ap-south-1** with the master; only **Lambda@Edge publish** must use **us-east-1**.
 - Direct S3 URLs still have **no** edge headers.
+
+---
+
+## CSP nonce (inline script)
+
+**Date:** 2026-11-01  
+**Files:** `cfn_templates/compute-stack.yaml` (edge `ZipFile`), `static/index.html`
+
+**What we did**
+
+- Removed **`script-src 'unsafe-inline'`**; use **`script-src 'self' 'nonce-…'`** per request.
+- **Origin-response** Lambda@Edge: random nonce → CSP header + inject `nonce="…"` on `<script>` in HTML body from S3.
+- **`static/index.html`** keeps a plain `<script>`; nonce is added at the edge (see HTML comment).
+
+**How to verify**
+
+See **Quick reference (curl)** at the top of this file.
+
+**Notes**
+
+- Nonce changes every request; do not hard-code nonce in S3 HTML.
+- Styles still use **`style-src 'unsafe-inline'`** (inline `<style>` in `index.html`).
 
 ---
 
@@ -145,18 +187,13 @@ curl.exe -sS -I "$URL" | findstr /i "content-security-policy strict-transport x-
 
 **How to verify**
 
-```powershell
-$URL = aws cloudformation describe-stacks --stack-name simple-master-dev --region ap-south-1 `
-  --query "Stacks[0].Outputs[?OutputKey=='CloudFrontURL'].OutputValue" --output text
-curl.exe -sS -I "$URL/backup"
-curl.exe -sS -I "$URL/archive.zip"
-curl.exe -sS -I "$URL/index.html"
-```
+See **Quick reference (curl)** at the top of this file.
 
 **Notes**
 
 - WAF is billed separately from Free Tier; delete **`simple-waf-dev`** when not needed.
 - Rules apply on **CloudFront** only, not direct S3 URLs.
+- **400** = WAF block; **404** from S3 means the path was **not** blocked and the object is missing.
 
 ---
 

@@ -112,32 +112,61 @@ Resources:
       Runtime: nodejs22.x
       Handler: index.applySecurityHeaders
       Role: !GetAtt ApplySecurityHeadersRole.Arn
-      Timeout: 5
-      MemorySize: 128
+      Timeout: 10
+      MemorySize: 256
       Code:
         ZipFile: |
           'use strict';
-          var SECURITY_HEADERS = {
-            'content-security-policy': {
-              key: 'Content-Security-Policy',
-              value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'"
-            },
-            'strict-transport-security': {
-              key: 'Strict-Transport-Security',
-              value: 'max-age=63072000; includeSubDomains; preload'
-            },
-            'x-content-type-options': {
-              key: 'X-Content-Type-Options',
-              value: 'nosniff'
-            }
-          };
-          function applySecurityHeaders(response) {
-            var headers = response.headers;
-            Object.keys(SECURITY_HEADERS).forEach(function (name) {
-              headers[name] = [SECURITY_HEADERS[name]];
+          var crypto = require('crypto');
+
+          function makeNonce() {
+            return crypto.randomBytes(16).toString('base64');
+          }
+
+          function buildCsp(nonce) {
+            return "default-src 'self'; script-src 'self' 'nonce-" + nonce + "'; style-src 'unsafe-inline'; base-uri 'self'";
+          }
+
+          function injectScriptNonce(html, nonce) {
+            return html.replace(/<script(?![^>]*\snonce=)([\s>])/gi, function (_, after) {
+              return '<script nonce="' + nonce + '"' + after;
             });
+          }
+
+          function applySecurityHeaders(response, nonce) {
+            var headers = response.headers;
+            headers['content-security-policy'] = [{
+              key: 'Content-Security-Policy',
+              value: buildCsp(nonce),
+            }];
+            headers['strict-transport-security'] = [{
+              key: 'Strict-Transport-Security',
+              value: 'max-age=63072000; includeSubDomains; preload',
+            }];
+            headers['x-content-type-options'] = [{
+              key: 'X-Content-Type-Options',
+              value: 'nosniff',
+            }];
             return response;
           }
+
+          function handleOriginResponse(record) {
+            var response = record.response;
+            var nonce = makeNonce();
+            var headers = response.headers || {};
+            var contentType = (headers['content-type'] && headers['content-type'][0] && headers['content-type'][0].value) || '';
+
+            if (contentType.indexOf('text/html') !== -1 && response.body && response.body.data) {
+              var html = Buffer.from(response.body.data, 'base64').toString('utf8');
+              html = injectScriptNonce(html, nonce);
+              var bodyBytes = Buffer.byteLength(html, 'utf8');
+              response.body = { encoding: 'base64', data: Buffer.from(html, 'utf8').toString('base64') };
+              headers['content-length'] = [{ key: 'Content-Length', value: String(bodyBytes) }];
+            }
+
+            return applySecurityHeaders(response, nonce);
+          }
+
           exports.applySecurityHeaders = (event, context, callback) => {
             var record = event.Records[0].cf;
             var eventType = record.config.eventType;
@@ -146,7 +175,7 @@ Resources:
               return;
             }
             if (eventType === 'origin-response') {
-              callback(null, applySecurityHeaders(record.response));
+              callback(null, handleOriginResponse(record));
               return;
             }
             callback(null, record.response || record.request);
