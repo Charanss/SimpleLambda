@@ -49,15 +49,57 @@ Resources:
                 ResponseCode: 400
                 CustomResponseBodyKey: badRequestPlain
           Statement:
-            RegexMatchStatement:
-              FieldToMatch:
-                UriPath: {}
-              RegexString: '(^|/)[^?#]*\\.(bak|old|zip|backup)(/|$)|(^|/)backup(/|$)'
-              TextTransformations:
-                - Priority: 0
-                  Type: URL_DECODE
-                - Priority: 1
-                  Type: LOWERCASE
+            OrStatement:
+              Statements:
+                - ByteMatchStatement:
+                    FieldToMatch:
+                      UriPath: {}
+                    PositionalConstraint: ENDS_WITH
+                    SearchString: .zip
+                    TextTransformations:
+                      - Priority: 0
+                        Type: URL_DECODE
+                      - Priority: 1
+                        Type: LOWERCASE
+                - ByteMatchStatement:
+                    FieldToMatch:
+                      UriPath: {}
+                    PositionalConstraint: ENDS_WITH
+                    SearchString: .bak
+                    TextTransformations:
+                      - Priority: 0
+                        Type: URL_DECODE
+                      - Priority: 1
+                        Type: LOWERCASE
+                - ByteMatchStatement:
+                    FieldToMatch:
+                      UriPath: {}
+                    PositionalConstraint: ENDS_WITH
+                    SearchString: .old
+                    TextTransformations:
+                      - Priority: 0
+                        Type: URL_DECODE
+                      - Priority: 1
+                        Type: LOWERCASE
+                - ByteMatchStatement:
+                    FieldToMatch:
+                      UriPath: {}
+                    PositionalConstraint: ENDS_WITH
+                    SearchString: .backup
+                    TextTransformations:
+                      - Priority: 0
+                        Type: URL_DECODE
+                      - Priority: 1
+                        Type: LOWERCASE
+                - RegexMatchStatement:
+                    FieldToMatch:
+                      UriPath: {}
+                    RegexString: '^/backup(/|$)'
+                    TextTransformations:
+                      - Priority: 0
+                        Type: URL_DECODE
+                      - Priority: 1
+                        Type: LOWERCASE
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
