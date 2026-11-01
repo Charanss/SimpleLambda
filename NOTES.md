@@ -2,7 +2,7 @@
 
 Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).  
 **Default region:** `ap-south-1` (Mumbai)  
-**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`**, `compute-stack.yaml`, `persistent-stack.yaml`, `network-stack.yaml`, `network-edge-lambda.yaml` (us-east-1)
+**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`**, `compute-stack.yaml`, `persistent-stack.yaml`, **`network-stack.yaml`** (CloudFront + edge Lambda, deploy **us-east-1**)
 
 ---
 
@@ -13,9 +13,8 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 **What we did**
 
-- **Nested stacks:** compute, persistent (S3), network (CloudFront + Lambda@Edge headers).
-- CD deploys **`network-edge-lambda`** in **us-east-1** first, then master in **ap-south-1**.
-- Security headers (CSP, HSTS, X-Content-Type-Options) come from **edge Lambda** on **viewer-response**, not from compute stack.
+- **Network stack** (`network-stack.yaml`): CloudFront + **Lambda@Edge** in **one template**; deploy **`simple-network-dev`** in **us-east-1** after master.
+- Security headers on **viewer-response** (CSP, HSTS, X-Content-Type-Options). **Not** in compute stack.
 - All outputs (Lambda, bucket, **CloudFrontURL**, etc.) on the **master** stack.
 
 **How to verify**
@@ -104,8 +103,8 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 ## Network stack (CloudFront + Lambda@Edge headers)
 
 **Date:** Edge security headers  
-**Templates:** `network-stack.yaml`, `network-edge-lambda.yaml`  
-**Stack names:** nested **NetworkStack**; edge Lambda **`simple-network-edge-dev`** (us-east-1 only)
+**Templates:** `cfn_templates/network-stack.yaml` only (edge Lambda + CloudFront)  
+**Stack name:** **`simple-network-dev`** in **us-east-1**
 
 **What we did**
 
@@ -124,7 +123,7 @@ curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/" | findstr /i "content-securi
 
 **Notes**
 
-- Lambda@Edge must be created in **us-east-1** (`network-edge-lambda.yaml`).
+- Lambda@Edge must be deployed via **network-stack** in **us-east-1** (AWS requirement).
 - Direct S3 URLs still have **no** edge headers.
 
 ---

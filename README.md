@@ -36,9 +36,7 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 | `AWS::CloudFront::Distribution` | CDN in front of S3 website origin |
 | Lambda@Edge association | **Viewer-response** function adds CSP, HSTS, `X-Content-Type-Options` |
 
-Edge Lambda template: **`cfn_templates/network-edge-lambda.yaml`** (must deploy in **`us-east-1`**).
-
-Open **`CloudFrontURL`** from master stack outputs. Test headers:
+Edge Lambda and CloudFront live in **`cfn_templates/network-stack.yaml`** only (deploy stack **`simple-network-dev`** in **`us-east-1`**).
 
 ```powershell
 curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/" | findstr /i "content-security-policy strict-transport-security x-content-type-options"

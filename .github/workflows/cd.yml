@@ -20,9 +20,9 @@ on:
 
 env:
   AWS_REGION: ap-south-1
-  EDGE_LAMBDA_REGION: us-east-1
+  NETWORK_STACK_REGION: us-east-1
   MASTER_STACK_NAME: simple-master-dev
-  EDGE_LAMBDA_STACK_NAME: simple-network-edge-dev
+  NETWORK_STACK_NAME: simple-network-dev
   COMPUTE_RESOURCE_PREFIX: simple-compute-dev
   PERSISTENT_RESOURCE_PREFIX: simple-persistent-dev
   NETWORK_RESOURCE_PREFIX: simple-network-dev
@@ -67,25 +67,9 @@ jobs:
           aws s3 cp cfn_templates/compute-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}compute-stack.yaml"
           aws s3 cp cfn_templates/persistent-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}persistent-stack.yaml"
           aws s3 cp cfn_templates/network-stack.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}network-stack.yaml"
-          aws s3 cp cfn_templates/network-edge-lambda.yaml "s3://${TEMPLATES_BUCKET}/${TEMPLATES_S3_PREFIX}network-edge-lambda.yaml"
           echo "TEMPLATES_BUCKET=${TEMPLATES_BUCKET}" >> "${GITHUB_ENV}"
 
-      - name: Deploy edge security Lambda (Lambda@Edge, us-east-1)
-        run: |
-          aws cloudformation deploy \
-            --template-file cfn_templates/network-edge-lambda.yaml \
-            --stack-name "${EDGE_LAMBDA_STACK_NAME}" \
-            --region "${EDGE_LAMBDA_REGION}" \
-            --capabilities CAPABILITY_IAM \
-            --no-fail-on-empty-changeset
-          EDGE_ARN=$(aws cloudformation describe-stacks \
-            --stack-name "${EDGE_LAMBDA_STACK_NAME}" \
-            --region "${EDGE_LAMBDA_REGION}" \
-            --query "Stacks[0].Outputs[?OutputKey=='ViewerResponseLambdaVersionArn'].OutputValue" \
-            --output text)
-          echo "VIEWER_RESPONSE_LAMBDA_ARN=${EDGE_ARN}" >> "${GITHUB_ENV}"
-
-      - name: Deploy master stack
+      - name: Deploy master stack (compute + persistent)
         run: |
           aws cloudformation deploy \
             --template-file cfn_templates/master-stack.yaml \
@@ -97,8 +81,23 @@ jobs:
               TemplateS3Prefix="${TEMPLATES_S3_PREFIX}" \
               ComputeResourcePrefix="${COMPUTE_RESOURCE_PREFIX}" \
               PersistentResourcePrefix="${PERSISTENT_RESOURCE_PREFIX}" \
-              NetworkResourcePrefix="${NETWORK_RESOURCE_PREFIX}" \
-              ViewerResponseLambdaVersionArn="${VIEWER_RESPONSE_LAMBDA_ARN}" \
+            --no-fail-on-empty-changeset
+
+      - name: Deploy network stack (CloudFront + edge Lambda, us-east-1)
+        run: |
+          ORIGIN=$(aws cloudformation describe-stacks \
+            --stack-name "${MASTER_STACK_NAME}" \
+            --region "${AWS_REGION}" \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteOriginDomainName'].OutputValue" \
+            --output text)
+          aws cloudformation deploy \
+            --template-file cfn_templates/network-stack.yaml \
+            --stack-name "${NETWORK_STACK_NAME}" \
+            --region "${NETWORK_STACK_REGION}" \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              OriginDomainName="${ORIGIN}" \
+              ResourceNamePrefix="${NETWORK_RESOURCE_PREFIX}" \
             --no-fail-on-empty-changeset
 
       - name: Upload index.html to S3
@@ -114,8 +113,8 @@ jobs:
       - name: Invalidate CloudFront cache
         run: |
           DIST_ID=$(aws cloudformation describe-stacks \
-            --stack-name "${MASTER_STACK_NAME}" \
-            --region "${AWS_REGION}" \
+            --stack-name "${NETWORK_STACK_NAME}" \
+            --region "${NETWORK_STACK_REGION}" \
             --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
             --output text)
           aws cloudfront create-invalidation \
@@ -124,8 +123,15 @@ jobs:
 
       - name: Stack outputs
         run: |
+          echo "=== Master (ap-south-1) ==="
           aws cloudformation describe-stacks \
             --stack-name "${MASTER_STACK_NAME}" \
             --region "${AWS_REGION}" \
+            --query "Stacks[0].Outputs" \
+            --output table
+          echo "=== Network (us-east-1) ==="
+          aws cloudformation describe-stacks \
+            --stack-name "${NETWORK_STACK_NAME}" \
+            --region "${NETWORK_STACK_REGION}" \
             --query "Stacks[0].Outputs" \
             --output table

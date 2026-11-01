@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Master stack - nested compute, persistent, and network stacks
+Description: Master stack - nested compute and persistent stacks (network stack deployed separately in us-east-1)
 
 Parameters:
   TemplateS3Bucket:
@@ -15,12 +15,6 @@ Parameters:
   PersistentResourcePrefix:
     Type: String
     Default: simple-persistent-dev
-  NetworkResourcePrefix:
-    Type: String
-    Default: simple-network-dev
-  ViewerResponseLambdaVersionArn:
-    Type: String
-    Description: Lambda@Edge version ARN from network-edge-lambda (deploy in us-east-1)
 
 Resources:
   ComputeStack:
@@ -39,16 +33,6 @@ Resources:
         ResourceNamePrefix: !Ref PersistentResourcePrefix
       TimeoutInMinutes: 30
 
-  NetworkStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}network-stack.yaml'
-      Parameters:
-        ResourceNamePrefix: !Ref NetworkResourcePrefix
-        OriginDomainName: !GetAtt PersistentStack.Outputs.WebsiteOriginDomainName
-        ViewerResponseLambdaVersionArn: !Ref ViewerResponseLambdaVersionArn
-      TimeoutInMinutes: 60
-
 Outputs:
   FunctionName:
     Value: !GetAtt ComputeStack.Outputs.FunctionName
@@ -62,9 +46,6 @@ Outputs:
   WebsiteURL:
     Value: !GetAtt PersistentStack.Outputs.WebsiteURL
 
-  CloudFrontURL:
-    Description: Use this URL for CSP / HSTS / nosniff headers (edge Lambda)
-    Value: !GetAtt NetworkStack.Outputs.CloudFrontURL
-
-  CloudFrontDistributionId:
-    Value: !GetAtt NetworkStack.Outputs.CloudFrontDistributionId
+  WebsiteOriginDomainName:
+    Description: Pass to network-stack (CloudFront origin)
+    Value: !GetAtt PersistentStack.Outputs.WebsiteOriginDomainName
