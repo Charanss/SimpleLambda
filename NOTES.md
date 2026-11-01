@@ -13,8 +13,8 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 **What we did**
 
-- **Network stack** (`network-stack.yaml`): CloudFront + **Lambda@Edge** in **one template**; deploy **`simple-network-dev`** in **us-east-1** after master.
-- Security headers on **origin-response** (CSP, HSTS, X-Content-Type-Options); **viewer-request** associated for edge pipeline (pass-through).
+- **Compute stack** (`compute-stack.yaml`): all Lambdas — regional hello (master / ap-south-1) and **edge-security** (`simple-compute-dev-edge` in **us-east-1**).
+- **Network stack** only wires CloudFront to **`EdgeLambdaVersionArn`** from compute (viewer-request + origin-response).
 - All outputs (Lambda, bucket, **CloudFrontURL**, etc.) on the **master** stack.
 
 **How to verify**

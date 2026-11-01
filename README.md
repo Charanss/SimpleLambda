@@ -20,7 +20,8 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 |----------|---------|
 | `AWS::Logs::LogGroup` | Stores Lambda execution logs (7-day retention) |
 | `AWS::IAM::Role` | Lets Lambda run and write to CloudWatch Logs |
-| `AWS::Lambda::Function` | Your Python handler (`index.handler`) |
+| `AWS::Lambda::Function` | Python hello-world (`EnableRegionalApp`) |
+| `AWS::Lambda::Function` | Lambda@Edge security headers (`EnableEdgeFunction`, deploy in **us-east-1**) |
 
 ## Persistent stack (`cfn_templates/persistent-stack.yaml`)
 
@@ -33,10 +34,7 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 
 | Resource | Purpose |
 |----------|---------|
-| `AWS::CloudFront::Distribution` | CDN in front of S3 website origin |
-| Lambda@Edge association | **viewer-request** (pass-through) + **origin-response** (CSP, HSTS, `X-Content-Type-Options`) |
-
-Edge Lambda and CloudFront live in **`cfn_templates/network-stack.yaml`** only (deploy stack **`simple-network-dev`** in **`us-east-1`**).
+| `AWS::CloudFront::Distribution` | CDN; associates **edge Lambda from compute stack** |
 
 ```powershell
 curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/" | findstr /i "content-security-policy strict-transport-security x-content-type-options"

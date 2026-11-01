@@ -1,22 +1,37 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Compute stack - simple Lambda for Free Tier
+Description: Compute stack - regional app Lambda and/or Lambda@Edge for CloudFront
 
 Parameters:
   FunctionNameSuffix:
     Type: String
     Default: hello
-    Description: Suffix for the Lambda function name (full name is stack-name-suffix)
   ResourceNamePrefix:
     Type: String
     Default: ''
-    Description: Optional fixed prefix for names (used by master stack); empty uses AWS::StackName
+  EnableRegionalApp:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create Python hello Lambda (ap-south-1 via master)
+  EnableEdgeFunction:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create Lambda@Edge for CloudFront (deploy stack in us-east-1)
 
 Conditions:
   UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
+  CreateRegionalApp: !Equals [!Ref EnableRegionalApp, 'true']
+  CreateEdgeFunction: !Equals [!Ref EnableEdgeFunction, 'true']
 
 Resources:
   HelloLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: CreateRegionalApp
     Properties:
       LogGroupName: !If
         - UseResourceNamePrefix
@@ -26,6 +41,7 @@ Resources:
 
   HelloLambdaRole:
     Type: AWS::IAM::Role
+    Condition: CreateRegionalApp
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -39,6 +55,7 @@ Resources:
 
   HelloFunction:
     Type: AWS::Lambda::Function
+    Condition: CreateRegionalApp
     DependsOn: HelloLogGroup
     Properties:
       FunctionName: !If
@@ -63,11 +80,89 @@ Resources:
                   }),
               }
 
+  EdgeSecurityRole:
+    Type: AWS::IAM::Role
+    Condition: CreateEdgeFunction
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  EdgeSecurityFunction:
+    Type: AWS::Lambda::Function
+    Condition: CreateEdgeFunction
+    Properties:
+      FunctionName: !If
+        - UseResourceNamePrefix
+        - !Sub '${ResourceNamePrefix}-edge-security'
+        - !Sub '${AWS::StackName}-edge-security'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt EdgeSecurityRole.Arn
+      Timeout: 5
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          'use strict';
+          var SECURITY_HEADERS = {
+            'content-security-policy': {
+              key: 'Content-Security-Policy',
+              value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'"
+            },
+            'strict-transport-security': {
+              key: 'Strict-Transport-Security',
+              value: 'max-age=63072000; includeSubDomains; preload'
+            },
+            'x-content-type-options': {
+              key: 'X-Content-Type-Options',
+              value: 'nosniff'
+            }
+          };
+          function applySecurityHeaders(response) {
+            var headers = response.headers;
+            Object.keys(SECURITY_HEADERS).forEach(function (name) {
+              headers[name] = [SECURITY_HEADERS[name]];
+            });
+            return response;
+          }
+          exports.handler = (event, context, callback) => {
+            var record = event.Records[0].cf;
+            var eventType = record.config.eventType;
+            if (eventType === 'viewer-request') {
+              callback(null, record.request);
+              return;
+            }
+            if (eventType === 'origin-response') {
+              callback(null, applySecurityHeaders(record.response));
+              return;
+            }
+            callback(null, record.response || record.request);
+          };
+
+  EdgeSecurityVersion:
+    Type: AWS::Lambda::Version
+    Condition: CreateEdgeFunction
+    Properties:
+      FunctionName: !Ref EdgeSecurityFunction
+
 Outputs:
   FunctionName:
-    Description: Lambda function name (use for invoke / console)
+    Condition: CreateRegionalApp
     Value: !Ref HelloFunction
 
   FunctionArn:
-    Description: Lambda function ARN
+    Condition: CreateRegionalApp
     Value: !GetAtt HelloFunction.Arn
+
+  EdgeLambdaVersionArn:
+    Condition: CreateEdgeFunction
+    Description: Publish in us-east-1; pass to network-stack
+    Value: !Ref EdgeSecurityVersion

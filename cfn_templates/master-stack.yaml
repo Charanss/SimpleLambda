@@ -23,6 +23,8 @@ Resources:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}compute-stack.yaml'
       Parameters:
         ResourceNamePrefix: !Ref ComputeResourcePrefix
+        EnableRegionalApp: 'true'
+        EnableEdgeFunction: 'false'
       TimeoutInMinutes: 15
 
   PersistentStack:

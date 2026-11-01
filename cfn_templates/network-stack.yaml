@@ -1,94 +1,29 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Network stack - CloudFront + Lambda@Edge security headers (deploy in us-east-1)
+Description: Network stack - CloudFront with Lambda@Edge from compute stack
 
 Parameters:
   ResourceNamePrefix:
     Type: String
     Default: ''
-    Description: Prefix for naming context (optional)
   OriginDomainName:
     Type: String
-    Description: S3 static website origin domain from persistent stack (ap-south-1)
+    Description: S3 website origin from persistent stack
+  EdgeLambdaVersionArn:
+    Type: String
+    Description: Lambda@Edge version ARN from compute stack (us-east-1)
 
 Conditions:
   UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
 
 Resources:
-  EdgeSecurityRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-                - edgelambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-  EdgeSecurityFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub '${AWS::StackName}-edge-security'
-      Runtime: nodejs22.x
-      Handler: index.handler
-      Role: !GetAtt EdgeSecurityRole.Arn
-      Timeout: 5
-      MemorySize: 128
-      Code:
-        ZipFile: |
-          'use strict';
-          var SECURITY_HEADERS = {
-            'content-security-policy': {
-              key: 'Content-Security-Policy',
-              value: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'"
-            },
-            'strict-transport-security': {
-              key: 'Strict-Transport-Security',
-              value: 'max-age=63072000; includeSubDomains; preload'
-            },
-            'x-content-type-options': {
-              key: 'X-Content-Type-Options',
-              value: 'nosniff'
-            }
-          };
-          function applySecurityHeaders(response) {
-            var headers = response.headers;
-            Object.keys(SECURITY_HEADERS).forEach(function (name) {
-              headers[name] = [SECURITY_HEADERS[name]];
-            });
-            return response;
-          }
-          exports.handler = (event, context, callback) => {
-            var record = event.Records[0].cf;
-            var eventType = record.config.eventType;
-            if (eventType === 'viewer-request') {
-              callback(null, record.request);
-              return;
-            }
-            if (eventType === 'origin-response') {
-              callback(null, applySecurityHeaders(record.response));
-              return;
-            }
-            callback(null, record.response || record.request);
-          };
-
-  EdgeSecurityVersion:
-    Type: AWS::Lambda::Version
-    Properties:
-      FunctionName: !Ref EdgeSecurityFunction
-
   SiteDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Comment: !If
           - UseResourceNamePrefix
-          - !Sub '${ResourceNamePrefix} CDN with edge security headers'
-          - !Sub '${AWS::StackName} CDN with edge security headers'
+          - !Sub '${ResourceNamePrefix} CDN (edge Lambda from compute stack)'
+          - !Sub '${AWS::StackName} CDN (edge Lambda from compute stack)'
         Enabled: true
         DefaultRootObject: index.html
         HttpVersion: http2and3
@@ -107,19 +42,13 @@ Resources:
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           LambdaFunctionAssociations:
             - EventType: viewer-request
-              LambdaFunctionARN: !Ref EdgeSecurityVersion
+              LambdaFunctionARN: !Ref EdgeLambdaVersionArn
             - EventType: origin-response
-              LambdaFunctionARN: !Ref EdgeSecurityVersion
+              LambdaFunctionARN: !Ref EdgeLambdaVersionArn
 
 Outputs:
   CloudFrontURL:
-    Description: HTTPS site URL (CSP, HSTS, X-Content-Type-Options via edge Lambda)
     Value: !Sub 'https://${SiteDistribution.DomainName}'
 
   CloudFrontDistributionId:
-    Description: Distribution ID for cache invalidation
     Value: !Ref SiteDistribution
-
-  EdgeLambdaVersionArn:
-    Description: Lambda@Edge version (viewer-request + origin-response)
-    Value: !Ref EdgeSecurityVersion
