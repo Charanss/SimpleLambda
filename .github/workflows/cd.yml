@@ -1,9 +1,9 @@
 name: CD
 
-# Deploy after CI succeeds on main (workflow_run), or manual "Run workflow" here.
-# Do not deploy stacks from a local CLI or CloudFormation console for this project.
+# Called from CI after lint on main, or run manually here. No local/Console deploy.
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       auth:
@@ -13,10 +13,6 @@ on:
           - oidc
           - access-keys
         default: access-keys
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
 
 env:
   AWS_REGION: ap-south-1
@@ -34,20 +30,13 @@ env:
 permissions:
   id-token: write
   contents: read
-  actions: read
 
 jobs:
   deploy:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Configure AWS credentials (OIDC)
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.auth == 'oidc'
@@ -57,7 +46,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Configure AWS credentials (access keys)
-        if: github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.event.inputs.auth == 'access-keys')
+        if: github.event_name == 'workflow_call' || (github.event_name == 'workflow_dispatch' && github.event.inputs.auth == 'access-keys')
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}

@@ -15,15 +15,15 @@ See **[NOTES.md](./NOTES.md)** for a feature-by-feature log.
 
 **When CD runs**
 
-- **After CI succeeds** on a push to **`main`** (that touched `cfn_templates/**`, `static/**`, or workflow files)
-- Or **Actions → CD → Run workflow** (choose **access-keys** or **oidc**)
+- **CI** workflow on push to **`main`**: after **cfn-lint** passes, the **deploy** job runs **`cd.yml`**
+- Or **Actions → CD → Run workflow** (manual only; same deploy steps)
 
 **GitHub secrets (CD)**
 
 - **access-keys (auto deploy after CI):** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - **oidc (manual runs):** `AWS_ROLE_ARN`
 
-Typical flow: PR → **CI** → merge to **main** → **CI** again → **CD** (if CI passed).
+Typical flow: PR → **CI** (lint only) → merge to **main** → **CI** (lint then deploy in one run).
 
 Default region for master/data: **`ap-south-1`**. Lambda@Edge + WAF web ACL stacks: **`us-east-1`**.
 

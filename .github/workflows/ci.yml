@@ -1,6 +1,6 @@
 name: CI
 
-# Lint on PR and on push to main. CD runs only after this workflow succeeds (see cd.yml workflow_run).
+# Lint on PR; on push to main, call CD after lint passes (deploy job below).
 
 on:
   pull_request:
@@ -29,3 +29,12 @@ jobs:
         run: |
           pip install cfn-lint
           cfn-lint cfn_templates/compute-stack.yaml cfn_templates/persistent-stack.yaml cfn_templates/network-stack.yaml cfn_templates/master-stack.yaml cfn_templates/waf-stack.yaml
+
+  deploy:
+    needs: validate-template
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/cd.yml
+    secrets: inherit
+    permissions:
+      id-token: write
+      contents: read
