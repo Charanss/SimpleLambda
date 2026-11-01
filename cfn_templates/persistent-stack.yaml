@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Persistent stack - S3 static site with CloudFront CSP response header
+Description: Persistent stack - S3 bucket and static website (data layer)
 
 Parameters:
   ResourceNamePrefix:
     Type: String
     Default: ''
-    Description: Optional fixed prefix for bucket/policy names (master stack); empty uses AWS::StackName
+    Description: Optional fixed prefix for bucket names (master stack); empty uses AWS::StackName
 
 Conditions:
   UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
@@ -39,59 +39,15 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub '${SiteBucket.Arn}/*'
 
-  SiteCspHeadersPolicy:
-    Type: AWS::CloudFront::ResponseHeadersPolicy
-    Properties:
-      ResponseHeadersPolicyConfig:
-        Name: !If
-          - UseResourceNamePrefix
-          - !Sub '${ResourceNamePrefix}-csp-headers'
-          - !Sub '${AWS::StackName}-csp-headers'
-        Comment: Content-Security-Policy for static index.html
-        SecurityHeadersConfig:
-          ContentSecurityPolicy:
-            ContentSecurityPolicy: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'"
-            Override: true
-
-  SiteDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Comment: !If
-          - UseResourceNamePrefix
-          - !Sub '${ResourceNamePrefix} static site via CloudFront'
-          - !Sub '${AWS::StackName} static site via CloudFront'
-        Enabled: true
-        DefaultRootObject: index.html
-        HttpVersion: http2and3
-        PriceClass: PriceClass_200
-        Origins:
-          - Id: S3WebsiteOrigin
-            DomainName: !Sub '${SiteBucket}.s3-website.${AWS::Region}.amazonaws.com'
-            CustomOriginConfig:
-              OriginProtocolPolicy: http-only
-              HTTPPort: 80
-              HTTPSPort: 443
-        DefaultCacheBehavior:
-          TargetOriginId: S3WebsiteOrigin
-          ViewerProtocolPolicy: redirect-to-https
-          Compress: true
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-          ResponseHeadersPolicyId: !Ref SiteCspHeadersPolicy
-
 Outputs:
   BucketName:
     Description: S3 bucket name (upload index.html here)
     Value: !Ref SiteBucket
 
   WebsiteURL:
-    Description: S3 static website URL (direct, no CSP header)
+    Description: S3 static website URL (direct, no edge security headers)
     Value: !GetAtt SiteBucket.WebsiteURL
 
-  CloudFrontURL:
-    Description: HTTPS site URL with CSP response header (preferred)
-    Value: !Sub 'https://${SiteDistribution.DomainName}'
-
-  CloudFrontDistributionId:
-    Description: Use for cache invalidation after uploading index.html
-    Value: !Ref SiteDistribution
+  WebsiteOriginDomainName:
+    Description: S3 website origin hostname for CloudFront (network stack)
+    Value: !Sub '${SiteBucket}.s3-website.${AWS::Region}.amazonaws.com'

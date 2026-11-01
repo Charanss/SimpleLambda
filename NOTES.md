@@ -2,7 +2,7 @@
 
 Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).  
 **Default region:** `ap-south-1` (Mumbai)  
-**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`** (nested), `compute-stack.yaml`, `persistent-stack.yaml`
+**CloudFormation templates:** `cfn_templates/` — **`master-stack.yaml`**, `compute-stack.yaml`, `persistent-stack.yaml`, `network-stack.yaml`, `network-edge-lambda.yaml` (us-east-1)
 
 ---
 
@@ -13,15 +13,15 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 **What we did**
 
-- **Nested stacks:** master deploys compute + persistent child templates from S3.
-- CD uploads child YAML to `s3://simple-lambda-cfn-{AccountId}/templates/` then deploys master.
-- Child stacks use **`ResourceNamePrefix`** so Lambda/S3 names stay `simple-compute-dev-hello` and `simple-persistent-dev-{AccountId}`.
+- **Nested stacks:** compute, persistent (S3), network (CloudFront + Lambda@Edge headers).
+- CD deploys **`network-edge-lambda`** in **us-east-1** first, then master in **ap-south-1**.
+- Security headers (CSP, HSTS, X-Content-Type-Options) come from **edge Lambda** on **viewer-response**, not from compute stack.
 - All outputs (Lambda, bucket, **CloudFrontURL**, etc.) on the **master** stack.
 
 **How to verify**
 
 - CloudFormation → **`simple-master-dev`** → **Outputs** (region **ap-south-1**).
-- Nested stacks appear as **`simple-master-dev-ComputeStack-*`** and **`PersistentStack-*`**.
+- Nested stacks: **ComputeStack**, **PersistentStack**, **NetworkStack** under **`simple-master-dev`**.
 
 **Notes**
 
@@ -101,31 +101,38 @@ Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).
 
 ---
 
-## CloudFront + CSP response header
+## Network stack (CloudFront + Lambda@Edge headers)
 
-**Date:** Edge / security header feature  
-**Stack:** `simple-persistent-dev` / nested **PersistentStack** (not a separate “network stack”)  
-**Resources:** `SiteCspHeadersPolicy`, `SiteDistribution`
+**Date:** Edge security headers  
+**Templates:** `network-stack.yaml`, `network-edge-lambda.yaml`  
+**Stack names:** nested **NetworkStack**; edge Lambda **`simple-network-edge-dev`** (us-east-1 only)
 
 **What we did**
 
-- CloudFront distribution in front of S3 **website** origin.
-- **ResponseHeadersPolicy** sets HTTP header:  
-  `Content-Security-Policy: default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'`
-- Outputs: **CloudFrontURL** (preferred browser URL), **CloudFrontDistributionId**.
-- CD runs **CloudFront invalidation** after `index.html` upload.
+- **Persistent stack** = S3 only (no CloudFront).
+- **Network stack** = CloudFront origin → S3 website; **Lambda@Edge** on **viewer-response** adds:
+  - `Content-Security-Policy`
+  - `Strict-Transport-Security` (HTTPS transport security)
+  - `X-Content-Type-Options: nosniff`
+- Edge function is **not** in compute stack (compute = regional Lambda API).
 
 **How to verify**
 
 ```powershell
-curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/" | findstr /i content-security-policy
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/" | findstr /i "content-security-policy strict-transport x-content-type"
 ```
 
 **Notes**
 
-- First distribution create can take several minutes.
-- CSP on edge (CloudFront), not VPC “network stack”.
-- `'unsafe-inline'` needed for current inline script/style; tighten later with nonces if you refactor HTML.
+- Lambda@Edge must be created in **us-east-1** (`network-edge-lambda.yaml`).
+- Direct S3 URLs still have **no** edge headers.
+
+---
+
+## CloudFront + CSP (superseded by network stack)
+
+**Date:** Earlier approach  
+**Replaced by:** Response headers policy moved to **Lambda@Edge** in network stack (see above).
 
 ---
 

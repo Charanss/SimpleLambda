@@ -4,7 +4,7 @@ Minimal Lambda on AWS Free Tier, provisioned with the **compute** CloudFormation
 
 See **[NOTES.md](./NOTES.md)** for a feature-by-feature learning log (add new sections there when you extend the project).
 
-Templates live in **`cfn_templates/`**. **GitHub CD** deploys the **master stack** (`simple-master-dev`), which creates nested compute and persistent stacks.
+Templates live in **`cfn_templates/`**. **GitHub CD** deploys edge Lambda in **us-east-1**, then the **master stack** (`simple-master-dev`): compute + persistent (S3) + network (CloudFront + edge headers).
 
 ## AWS CLI
 
@@ -26,15 +26,22 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 
 | Resource | Purpose |
 |----------|---------|
-| `AWS::S3::Bucket` | Static website bucket |
-| `AWS::CloudFront::Distribution` | HTTPS URL in front of S3 |
-| `AWS::CloudFront::ResponseHeadersPolicy` | **`Content-Security-Policy`** HTTP header |
-| `static/index.html` | Page with inline `<script>`; uploaded by CD / CLI |
+| `AWS::S3::Bucket` | Static website bucket (data) |
+| `static/index.html` | Uploaded by CD / CLI |
 
-Open **`CloudFrontURL`** from stack Outputs (**ap-south-1** stack). Test CSP:
+## Network stack (`cfn_templates/network-stack.yaml`)
+
+| Resource | Purpose |
+|----------|---------|
+| `AWS::CloudFront::Distribution` | CDN in front of S3 website origin |
+| Lambda@Edge association | **Viewer-response** function adds CSP, HSTS, `X-Content-Type-Options` |
+
+Edge Lambda template: **`cfn_templates/network-edge-lambda.yaml`** (must deploy in **`us-east-1`**).
+
+Open **`CloudFrontURL`** from master stack outputs. Test headers:
 
 ```powershell
-curl.exe -sS -I "https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/" | findstr /i content-security-policy
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/" | findstr /i "content-security-policy strict-transport-security x-content-type-options"
 ```
 
 ## Deploy with AWS CLI

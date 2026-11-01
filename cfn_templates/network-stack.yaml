@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Network stack - CloudFront with Lambda@Edge security headers on viewer response
+
+Parameters:
+  ResourceNamePrefix:
+    Type: String
+    Default: ''
+    Description: Prefix for CloudFront comments/naming context
+  OriginDomainName:
+    Type: String
+    Description: S3 static website origin domain (from persistent stack)
+  ViewerResponseLambdaVersionArn:
+    Type: String
+    Description: Lambda@Edge version ARN from network-edge-lambda stack (us-east-1)
+
+Conditions:
+  UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
+
+Resources:
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !If
+          - UseResourceNamePrefix
+          - !Sub '${ResourceNamePrefix} CDN with edge security headers'
+          - !Sub '${AWS::StackName} CDN with edge security headers'
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200
+        Origins:
+          - Id: S3WebsiteOrigin
+            DomainName: !Ref OriginDomainName
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+              HTTPPort: 80
+              HTTPSPort: 443
+        DefaultCacheBehavior:
+          TargetOriginId: S3WebsiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          LambdaFunctionAssociations:
+            - EventType: viewer-response
+              LambdaFunctionARN: !Ref ViewerResponseLambdaVersionArn
+
+Outputs:
+  CloudFrontURL:
+    Description: HTTPS site URL (CSP, HSTS, X-Content-Type-Options via edge Lambda)
+    Value: !Sub 'https://${SiteDistribution.DomainName}'
+
+  CloudFrontDistributionId:
+    Description: Distribution ID for cache invalidation
+    Value: !Ref SiteDistribution

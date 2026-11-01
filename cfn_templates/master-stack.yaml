@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Master stack - nested compute and persistent stacks
+Description: Master stack - nested compute, persistent, and network stacks
 
 Parameters:
   TemplateS3Bucket:
     Type: String
-    Description: S3 bucket that holds nested stack templates (compute-stack.yaml, persistent-stack.yaml)
+    Description: S3 bucket that holds nested stack templates
   TemplateS3Prefix:
     Type: String
     Default: templates/
@@ -12,11 +12,15 @@ Parameters:
   ComputeResourcePrefix:
     Type: String
     Default: simple-compute-dev
-    Description: Lambda/log naming prefix (same as standalone compute stack name)
   PersistentResourcePrefix:
     Type: String
     Default: simple-persistent-dev
-    Description: S3/CloudFront naming prefix (same as standalone persistent stack name)
+  NetworkResourcePrefix:
+    Type: String
+    Default: simple-network-dev
+  ViewerResponseLambdaVersionArn:
+    Type: String
+    Description: Lambda@Edge version ARN from network-edge-lambda (deploy in us-east-1)
 
 Resources:
   ComputeStack:
@@ -33,29 +37,35 @@ Resources:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}persistent-stack.yaml'
       Parameters:
         ResourceNamePrefix: !Ref PersistentResourcePrefix
+      TimeoutInMinutes: 30
+
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: PersistentStack
+    Properties:
+      TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}network-stack.yaml'
+      Parameters:
+        ResourceNamePrefix: !Ref NetworkResourcePrefix
+        OriginDomainName: !GetAtt PersistentStack.Outputs.WebsiteOriginDomainName
+        ViewerResponseLambdaVersionArn: !Ref ViewerResponseLambdaVersionArn
       TimeoutInMinutes: 60
 
 Outputs:
   FunctionName:
-    Description: Lambda function name
     Value: !GetAtt ComputeStack.Outputs.FunctionName
 
   FunctionArn:
-    Description: Lambda function ARN
     Value: !GetAtt ComputeStack.Outputs.FunctionArn
 
   BucketName:
-    Description: S3 bucket for static site
     Value: !GetAtt PersistentStack.Outputs.BucketName
 
   WebsiteURL:
-    Description: S3 website URL (no CSP header)
     Value: !GetAtt PersistentStack.Outputs.WebsiteURL
 
   CloudFrontURL:
-    Description: HTTPS URL with CSP response header
-    Value: !GetAtt PersistentStack.Outputs.CloudFrontURL
+    Description: Use this URL for CSP / HSTS / nosniff headers (edge Lambda)
+    Value: !GetAtt NetworkStack.Outputs.CloudFrontURL
 
   CloudFrontDistributionId:
-    Description: CloudFront distribution ID for cache invalidation
-    Value: !GetAtt PersistentStack.Outputs.CloudFrontDistributionId
+    Value: !GetAtt NetworkStack.Outputs.CloudFrontDistributionId
