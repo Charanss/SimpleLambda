@@ -3,16 +3,14 @@ name: CI
 on:
   pull_request:
     paths:
-      - compute-stack.yaml
-      - storage-stack.yaml
+      - cfn_templates/**
       - static/**
       - .github/workflows/ci.yml
   push:
     branches:
       - main
     paths:
-      - compute-stack.yaml
-      - storage-stack.yaml
+      - cfn_templates/**
       - static/**
       - .github/workflows/ci.yml
 
@@ -26,4 +24,4 @@ jobs:
       - name: Lint CloudFormation template
         run: |
           pip install cfn-lint
-          cfn-lint compute-stack.yaml storage-stack.yaml
+          cfn-lint cfn_templates/compute-stack.yaml cfn_templates/storage-stack.yaml

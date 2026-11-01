@@ -20,7 +20,7 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 | `AWS::IAM::Role` | Lets Lambda run and write to CloudWatch Logs |
 | `AWS::Lambda::Function` | Your Python handler (`index.handler`) |
 
-## Storage stack (`storage-stack.yaml`)
+## Storage stack (`cfn_templates/storage-stack.yaml`)
 
 | Resource | Purpose |
 |----------|---------|
@@ -41,12 +41,12 @@ curl.exe -sS -I "https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/" | findstr /i co
 cd "C:\Projects\AWS_learn\Simple lambda"
 
 aws cloudformation deploy `
-  --template-file compute-stack.yaml `
+  --template-file cfn_templates/compute-stack.yaml `
   --stack-name simple-compute-dev `
   --capabilities CAPABILITY_IAM
 
 aws cloudformation deploy `
-  --template-file storage-stack.yaml `
+  --template-file cfn_templates/storage-stack.yaml `
   --stack-name simple-storage-dev
 
 $BUCKET = aws cloudformation describe-stacks --stack-name simple-storage-dev `
@@ -79,7 +79,7 @@ aws cloudformation delete-stack --stack-name simple-compute-dev
 ## Deploy via AWS Console (no CLI)
 
 1. Open **CloudFormation** in your region.
-2. **Create stack** → **Upload a template file** → choose `compute-stack.yaml`.
+2. **Create stack** → **Upload a template file** → choose `cfn_templates/compute-stack.yaml`.
 3. Stack name: `simple-compute-dev` → Next → Next → Submit.
 4. **Lambda** → open `simple-compute-dev-hello` → **Test** with `{}`.
 
@@ -89,7 +89,7 @@ Workflows live under `.github/workflows/`.
 
 | File | Type | What it does |
 |------|------|----------------|
-| **`ci.yml`** | **CI** | Runs `cfn-lint` on `compute-stack.yaml` (pull requests and pushes to `main`) — no AWS deploy |
+| **`ci.yml`** | **CI** | Runs `cfn-lint` on templates under **`cfn_templates/`** — no AWS deploy |
 | **`cd.yml`** | **CD** | `aws cloudformation deploy` to **`simple-compute-dev`** |
 
 **CD triggers:** push to `main` when the template or `cd.yml` changes (uses **OIDC**), or manual **Run workflow**.

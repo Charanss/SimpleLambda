@@ -1,7 +1,8 @@
 # Project notes
 
 Learning log for [SimpleLambda](https://github.com/Charanss/SimpleLambda).  
-**Default region:** `ap-south-1` (Mumbai)
+**Default region:** `ap-south-1` (Mumbai)  
+**CloudFormation templates:** `cfn_templates/` (`compute-stack.yaml`, `storage-stack.yaml`)
 
 When you add a feature, copy the **New feature template** at the bottom into a new dated section above it.
 
@@ -11,7 +12,7 @@ When you add a feature, copy the **New feature template** at the bottom into a n
 
 **Date:** Initial setup  
 **Stack name:** `simple-compute-dev`  
-**Template:** `compute-stack.yaml`
+**Template:** `cfn_templates/compute-stack.yaml`
 
 **What we did**
 
@@ -58,7 +59,7 @@ When you add a feature, copy the **New feature template** at the bottom into a n
 
 **Date:** After compute  
 **Stack name:** `simple-storage-dev`  
-**Template:** `storage-stack.yaml`  
+**Template:** `cfn_templates/storage-stack.yaml`  
 **Content:** `static/index.html` (inline `<script>`)
 
 **What we did**

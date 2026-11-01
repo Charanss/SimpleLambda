@@ -14,8 +14,7 @@ on:
     branches:
       - main
     paths:
-      - compute-stack.yaml
-      - storage-stack.yaml
+      - cfn_templates/**
       - static/**
       - .github/workflows/cd.yml
 
@@ -53,7 +52,7 @@ jobs:
       - name: Deploy compute stack
         run: |
           aws cloudformation deploy \
-            --template-file compute-stack.yaml \
+            --template-file cfn_templates/compute-stack.yaml \
             --stack-name "${COMPUTE_STACK_NAME}" \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
@@ -61,7 +60,7 @@ jobs:
       - name: Deploy storage stack
         run: |
           aws cloudformation deploy \
-            --template-file storage-stack.yaml \
+            --template-file cfn_templates/storage-stack.yaml \
             --stack-name "${STORAGE_STACK_NAME}" \
             --no-fail-on-empty-changeset
 
