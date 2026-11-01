@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>About · Simple Lambda</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #232f3e; }
+    nav { margin-bottom: 1.5rem; }
+    nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/index.html">Home</a>
+    <a href="/about.html">About</a>
+  </nav>
+  <h1>About this site</h1>
+  <p>Second static page from <code>static/about.html</code>, deployed with <code>index.html</code> via GitHub CI/CD.</p>
+  <p id="msg"></p>
+  <!-- nonce attribute is injected on this tag by Lambda@Edge (CSP script-src 'nonce-...') -->
+  <script>
+    (function () {
+      document.getElementById("msg").textContent =
+        "Page loaded at " + new Date().toLocaleString();
+    })();
+  </script>
+</body>
+</html>

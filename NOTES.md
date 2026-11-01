@@ -12,6 +12,7 @@ Replace `YOUR_DIST.cloudfront.net` with **CloudFrontURL** from stack **`simple-m
 
 ```text
 curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/index.html"
+curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/about.html"
 curl.exe -sS "https://YOUR_DIST.cloudfront.net/index.html"
 curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/backup"
 curl.exe -sS -I "https://YOUR_DIST.cloudfront.net/config.bak"

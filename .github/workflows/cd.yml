@@ -127,15 +127,18 @@ jobs:
               WebACLArn="${WEB_ACL_ARN}" \
             --no-fail-on-empty-changeset
 
-      - name: Upload index.html to S3
+      - name: Upload static HTML to S3
         run: |
           BUCKET=$(aws cloudformation describe-stacks \
             --stack-name "${MASTER_STACK_NAME}" \
             --region "${AWS_REGION}" \
             --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" \
             --output text)
-          aws s3 cp static/index.html "s3://${BUCKET}/index.html" \
-            --content-type "text/html; charset=utf-8"
+          for f in static/*.html; do
+            KEY=$(basename "$f")
+            aws s3 cp "$f" "s3://${BUCKET}/${KEY}" \
+              --content-type "text/html; charset=utf-8"
+          done
 
       - name: Invalidate CloudFront cache
         run: |
@@ -146,7 +149,7 @@ jobs:
             --output text)
           aws cloudfront create-invalidation \
             --distribution-id "${DIST_ID}" \
-            --paths "/index.html" "/"
+            --paths "/index.html" "/about.html" "/"
 
       - name: Stack outputs
         run: |
