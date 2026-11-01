@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Storage stack - S3 static website bucket for index.html
+Description: Storage stack - S3 static site with CloudFront CSP response header
 
 Resources:
   SiteBucket:
@@ -27,6 +27,40 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub '${SiteBucket.Arn}/*'
 
+  SiteCspHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-csp-headers'
+        Comment: Content-Security-Policy for static index.html
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: "default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'self'"
+            Override: true
+
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub '${AWS::StackName} static site via CloudFront'
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200
+        Origins:
+          - Id: S3WebsiteOrigin
+            DomainName: !Sub '${SiteBucket}.s3-website.${AWS::Region}.amazonaws.com'
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only
+              HTTPPort: 80
+              HTTPSPort: 443
+        DefaultCacheBehavior:
+          TargetOriginId: S3WebsiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SiteCspHeadersPolicy
+
 Outputs:
   BucketName:
     Description: S3 bucket name (upload index.html here)
@@ -35,5 +69,13 @@ Outputs:
       Name: !Sub '${AWS::StackName}-BucketName'
 
   WebsiteURL:
-    Description: Static website URL (after index.html is uploaded)
+    Description: S3 static website URL (direct, no CSP header)
     Value: !GetAtt SiteBucket.WebsiteURL
+
+  CloudFrontURL:
+    Description: HTTPS site URL with CSP response header (preferred)
+    Value: !Sub 'https://${SiteDistribution.DomainName}'
+
+  CloudFrontDistributionId:
+    Description: Use for cache invalidation after uploading index.html
+    Value: !Ref SiteDistribution

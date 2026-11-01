@@ -23,9 +23,15 @@ Configure credentials once: `aws configure` (Access Key, Secret Key, region, out
 | Resource | Purpose |
 |----------|---------|
 | `AWS::S3::Bucket` | Static website bucket |
-| `static/index.html` | Page with **inline `<script>`**; uploaded by CD / CLI |
+| `AWS::CloudFront::Distribution` | HTTPS URL in front of S3 |
+| `AWS::CloudFront::ResponseHeadersPolicy` | **`Content-Security-Policy`** HTTP header |
+| `static/index.html` | Page with inline `<script>`; uploaded by CD / CLI |
 
-After deploy, upload (if not using CD) and open **WebsiteURL** from stack Outputs in **ap-south-1**.
+Open **`CloudFrontURL`** from stack Outputs (**ap-south-1** stack). Test CSP:
+
+```powershell
+curl.exe -sS -I "https://YOUR_CLOUDFRONT_DOMAIN.cloudfront.net/" | findstr /i content-security-policy
+```
 
 ## Deploy with AWS CLI
 
@@ -44,6 +50,10 @@ aws cloudformation deploy `
 $BUCKET = aws cloudformation describe-stacks --stack-name simple-storage-dev `
   --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text
 aws s3 cp static/index.html "s3://$BUCKET/index.html" --content-type "text/html; charset=utf-8"
+
+$DIST_ID = aws cloudformation describe-stacks --stack-name simple-storage-dev `
+  --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" --output text
+aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/index.html" "/"
 ```
 
 ## Test

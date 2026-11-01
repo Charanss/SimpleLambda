@@ -74,6 +74,16 @@ jobs:
           aws s3 cp static/index.html "s3://${BUCKET}/index.html" \
             --content-type "text/html; charset=utf-8"
 
+      - name: Invalidate CloudFront cache
+        run: |
+          DIST_ID=$(aws cloudformation describe-stacks \
+            --stack-name "${STORAGE_STACK_NAME}" \
+            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDistributionId'].OutputValue" \
+            --output text)
+          aws cloudfront create-invalidation \
+            --distribution-id "${DIST_ID}" \
+            --paths "/index.html" "/"
+
       - name: Stack outputs
         run: |
           echo "=== Compute ==="
