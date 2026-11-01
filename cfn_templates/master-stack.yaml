@@ -41,7 +41,6 @@ Resources:
 
   NetworkStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: PersistentStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}network-stack.yaml'
       Parameters:
