@@ -15,15 +15,15 @@ See **[NOTES.md](./NOTES.md)** for a feature-by-feature log.
 
 **When CD runs**
 
-- Push to **`main`** that changes `cfn_templates/**`, `static/**`, or `.github/workflows/cd.yml`
+- **After CI succeeds** on a push to **`main`** (that touched `cfn_templates/**`, `static/**`, or workflow files)
 - Or **Actions → CD → Run workflow** (choose **access-keys** or **oidc**)
 
 **GitHub secrets (CD)**
 
-- **access-keys (default on push):** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- **access-keys (auto deploy after CI):** `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
 - **oidc (manual runs):** `AWS_ROLE_ARN`
 
-Typical flow: PR → **CI** → merge to **main** → **CD**.
+Typical flow: PR → **CI** → merge to **main** → **CI** again → **CD** (if CI passed).
 
 Default region for master/data: **`ap-south-1`**. Lambda@Edge + WAF web ACL stacks: **`us-east-1`**.
 

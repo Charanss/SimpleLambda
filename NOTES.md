@@ -83,14 +83,14 @@ curl.exe -sS -I "http://simple-persistent-dev-720685536707.s3-website.ap-south-1
 
 **What we did**
 
-- **CI:** `cfn-lint` on template changes (no AWS deploy).
-- **CD:** deploy order edge → WAF → master; upload `index.html`; invalidate CloudFront. See **Quick reference** above for curl commands.
+- **CI:** `cfn-lint` on PR and on push to `main` (no AWS deploy).
+- **CD:** runs **after CI succeeds** on push to `main`, or **Actions → CD → Run workflow** manually.
 - Stack names from workflow `env`: `MASTER_STACK_NAME`, `COMPUTE_EDGE_RESOURCE_PREFIX`, `WAF_STACK_NAME`, etc.
 - AWS account for deploy = account that owns the access keys (no separate account ID in GitHub).
 
 **How to verify**
 
-- Actions → **CI** on PR/push; **CD** on push to `main` or manual run.
+- **CI** on PR / push to `main` → if green, **CD** deploys (edge → WAF → master → S3 upload → invalidation).
 
 **Notes**
 

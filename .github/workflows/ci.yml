@@ -1,11 +1,14 @@
 name: CI
 
+# Lint on PR and on push to main. CD runs only after this workflow succeeds (see cd.yml workflow_run).
+
 on:
   pull_request:
     paths:
       - cfn_templates/**
       - static/**
       - .github/workflows/ci.yml
+      - .github/workflows/cd.yml
   push:
     branches:
       - main
@@ -13,6 +16,7 @@ on:
       - cfn_templates/**
       - static/**
       - .github/workflows/ci.yml
+      - .github/workflows/cd.yml
 
 jobs:
   validate-template:
