@@ -11,6 +11,7 @@ Conditions:
   UseResourceNamePrefix: !Not [!Equals [!Ref ResourceNamePrefix, '']]
 
 Resources:
+  # Object storage + static website hosting; CloudFront pulls from the website endpoint hostname.
   SiteBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -18,6 +19,7 @@ Resources:
         - UseResourceNamePrefix
         - !Sub '${ResourceNamePrefix}-${AWS::AccountId}'
         - !Sub '${AWS::StackName}-${AWS::AccountId}'
+      # Allow a public bucket policy below (required for anonymous GetObject on a public site).
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
@@ -26,6 +28,7 @@ Resources:
       WebsiteConfiguration:
         IndexDocument: index.html
 
+  # Lets anyone read objects (e.g. index.html); does not grant list/upload/delete.
   SiteBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:

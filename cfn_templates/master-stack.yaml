@@ -17,6 +17,7 @@ Parameters:
     Default: simple-persistent-dev
 
 Resources:
+  # Nested stack: regional Python hello Lambda + IAM + log group (same region as master).
   ComputeStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -27,6 +28,7 @@ Resources:
         EnableEdgeFunction: 'false'
       TimeoutInMinutes: 15
 
+  # Nested stack: S3 bucket, static website config, public read policy for index.html.
   PersistentStack:
     Type: AWS::CloudFormation::Stack
     Properties:

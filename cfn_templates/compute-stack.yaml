@@ -29,6 +29,7 @@ Conditions:
   CreateEdgeFunction: !Equals [!Ref EnableEdgeFunction, 'true']
 
 Resources:
+  # CloudWatch log group for the regional hello Lambda (created before the function).
   HelloLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: CreateRegionalApp
@@ -39,6 +40,7 @@ Resources:
         - !Sub '/aws/lambda/${AWS::StackName}-${FunctionNameSuffix}'
       RetentionInDays: 7
 
+  # Execution role: Lambda service can assume it and write logs (basic execution policy).
   HelloLambdaRole:
     Type: AWS::IAM::Role
     Condition: CreateRegionalApp
@@ -53,6 +55,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
+  # Regional API-style hello (master stack: EnableRegionalApp=true, ap-south-1).
   HelloFunction:
     Type: AWS::Lambda::Function
     Condition: CreateRegionalApp
@@ -80,7 +83,8 @@ Resources:
                   }),
               }
 
-  EdgeSecurityRole:
+  # Edge role: both lambda.amazonaws.com and edgelambda.amazonaws.com must trust the role.
+  ApplySecurityHeadersRole:
     Type: AWS::IAM::Role
     Condition: CreateEdgeFunction
     Properties:
@@ -96,17 +100,18 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
-  EdgeSecurityFunction:
+  # Lambda@Edge code (deploy stack in us-east-1 only); CSP/HSTS applied on origin-response.
+  ApplySecurityHeadersFunction:
     Type: AWS::Lambda::Function
     Condition: CreateEdgeFunction
     Properties:
       FunctionName: !If
         - UseResourceNamePrefix
-        - !Sub '${ResourceNamePrefix}-edge-security'
-        - !Sub '${AWS::StackName}-edge-security'
+        - !Sub '${ResourceNamePrefix}-applySecurityHeaders'
+        - !Sub '${AWS::StackName}-applySecurityHeaders'
       Runtime: nodejs22.x
-      Handler: index.handler
-      Role: !GetAtt EdgeSecurityRole.Arn
+      Handler: index.applySecurityHeaders
+      Role: !GetAtt ApplySecurityHeadersRole.Arn
       Timeout: 5
       MemorySize: 128
       Code:
@@ -133,7 +138,7 @@ Resources:
             });
             return response;
           }
-          exports.handler = (event, context, callback) => {
+          exports.applySecurityHeaders = (event, context, callback) => {
             var record = event.Records[0].cf;
             var eventType = record.config.eventType;
             if (eventType === 'viewer-request') {
@@ -147,11 +152,12 @@ Resources:
             callback(null, record.response || record.request);
           };
 
-  EdgeSecurityVersion:
+  # Immutable published version ARN — CloudFront associations must point at a version, not $LATEST.
+  ApplySecurityHeadersVersion:
     Type: AWS::Lambda::Version
     Condition: CreateEdgeFunction
     Properties:
-      FunctionName: !Ref EdgeSecurityFunction
+      FunctionName: !Ref ApplySecurityHeadersFunction
 
 Outputs:
   FunctionName:
@@ -165,4 +171,4 @@ Outputs:
   EdgeLambdaVersionArn:
     Condition: CreateEdgeFunction
     Description: Publish in us-east-1; pass to network-stack
-    Value: !Ref EdgeSecurityVersion
+    Value: !Ref ApplySecurityHeadersVersion
