@@ -27,6 +27,7 @@ env:
   COMPUTE_EDGE_REGION: us-east-1
   MASTER_STACK_NAME: simple-master-dev
   COMPUTE_RESOURCE_PREFIX: simple-compute-dev
+  COMPUTE_EDGE_RESOURCE_PREFIX: simple-compute-edge
   PERSISTENT_RESOURCE_PREFIX: simple-persistent-dev
   NETWORK_RESOURCE_PREFIX: simple-network-dev
   WAF_STACK_NAME: simple-waf-dev
@@ -82,7 +83,7 @@ jobs:
             --region "${COMPUTE_EDGE_REGION}" \
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
-              ResourceNamePrefix="${COMPUTE_RESOURCE_PREFIX}" \
+              ResourceNamePrefix="${COMPUTE_EDGE_RESOURCE_PREFIX}" \
               EnableRegionalApp=false \
               EnableEdgeFunction=true \
             --no-fail-on-empty-changeset
